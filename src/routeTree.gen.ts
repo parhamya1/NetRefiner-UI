@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ClerkRouteRouteImport } from './routes/clerk/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedPageManagementRouteImport } from './routes/_authenticated/page-management'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -55,6 +56,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPageManagementRoute =
+  AuthenticatedPageManagementRouteImport.update({
+    id: '/page-management',
+    path: '/page-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const errors503Route = errors503RouteImport.update({
   id: '/(errors)/503',
   path: '/503',
@@ -217,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/page-management': typeof AuthenticatedPageManagementRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/pages/$slug': typeof AuthenticatedPagesSlugRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -245,6 +253,7 @@ export interface FileRoutesByTo {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/page-management': typeof AuthenticatedPageManagementRoute
   '/': typeof AuthenticatedIndexRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/pages/$slug': typeof AuthenticatedPagesSlugRoute
@@ -279,6 +288,7 @@ export interface FileRoutesById {
   '/(errors)/404': typeof errors404Route
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
+  '/_authenticated/page-management': typeof AuthenticatedPageManagementRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/pages/$slug': typeof AuthenticatedPagesSlugRoute
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/page-management'
     | '/errors/$error'
     | '/pages/$slug'
     | '/settings/account'
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/page-management'
     | '/'
     | '/errors/$error'
     | '/pages/$slug'
@@ -373,6 +385,7 @@ export interface FileRouteTypes {
     | '/(errors)/404'
     | '/(errors)/500'
     | '/(errors)/503'
+    | '/_authenticated/page-management'
     | '/_authenticated/'
     | '/_authenticated/errors/$error'
     | '/_authenticated/pages/$slug'
@@ -427,6 +440,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/page-management': {
+      id: '/_authenticated/page-management'
+      path: '/page-management'
+      fullPath: '/page-management'
+      preLoaderRoute: typeof AuthenticatedPageManagementRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/(errors)/503': {
@@ -653,6 +673,7 @@ const AuthenticatedSettingsRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
+  AuthenticatedPageManagementRoute: typeof AuthenticatedPageManagementRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedPagesSlugRoute: typeof AuthenticatedPagesSlugRoute
@@ -665,6 +686,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
+  AuthenticatedPageManagementRoute: AuthenticatedPageManagementRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedPagesSlugRoute: AuthenticatedPagesSlugRoute,

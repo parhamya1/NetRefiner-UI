@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileText } from 'lucide-react'
+import { FileText, Settings } from 'lucide-react'
 import { getMenuTree } from '@/lib/api/pages'
 import { useAuthStore } from '@/stores/auth-store'
 import { useLayout } from '@/context/layout-provider'
@@ -16,7 +16,7 @@ import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
 import { TeamSwitcher } from './team-switcher'
-import { type MenuTreeNode } from '@/types/api'
+import { type MenuTreeNode, type UserRole } from '@/types/api'
 import { type NavItem, type SidebarData } from './types'
 
 function mapMenuNodeToNavItem(node: MenuTreeNode): NavItem {
@@ -41,7 +41,8 @@ function mapMenuNodeToNavItem(node: MenuTreeNode): NavItem {
 
 function buildDynamicSidebarData(
   menuTree: MenuTreeNode[] | undefined,
-  user: SidebarData['user']
+  user: SidebarData['user'],
+  role: UserRole | undefined
 ): SidebarData {
   const sortedRoots = (menuTree ?? [])
     .filter((node) => node.is_menu_visible)
@@ -49,29 +50,45 @@ function buildDynamicSidebarData(
 
   const dynamicItems = sortedRoots.map(mapMenuNodeToNavItem)
 
+  const pageGroup =
+    dynamicItems.length > 0
+      ? {
+          title: 'Pages',
+          items: dynamicItems,
+        }
+      : {
+          title: 'Pages',
+          items: [
+            {
+              title: 'No pages available',
+              url: '/',
+              icon: FileText,
+            },
+          ],
+        }
+
+  const isPageAdmin = role === 'admin' || role === 'superadmin'
+
   return {
     ...sidebarData,
     user,
-    navGroups:
-      dynamicItems.length > 0
+    navGroups: [
+      pageGroup,
+      ...(isPageAdmin
         ? [
             {
-              title: 'Pages',
-              items: dynamicItems,
-            },
-          ]
-        : [
-            {
-              title: 'Pages',
+              title: 'Administration',
               items: [
                 {
-                  title: 'No pages available',
-                  url: '/',
-                  icon: FileText,
+                  title: 'Page Management',
+                  url: '/page-management',
+                  icon: Settings,
                 },
               ],
             },
-          ],
+          ]
+        : []),
+    ],
   }
 }
 
@@ -96,8 +113,8 @@ export function AppSidebar() {
   )
 
   const dynamicSidebarData = useMemo(
-    () => buildDynamicSidebarData(menuTree, navUser),
-    [menuTree, navUser]
+    () => buildDynamicSidebarData(menuTree, navUser, auth.user?.role),
+    [auth.user?.role, menuTree, navUser]
   )
 
   return (

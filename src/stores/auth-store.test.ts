@@ -7,10 +7,14 @@ async function importAuthStore() {
 }
 
 const sampleUser = {
-  accountNo: 'ACC-1',
+  id: 'user-1',
   email: 'user@example.com',
-  role: ['user'],
-  exp: 1_700_000_000,
+  full_name: 'Example User',
+  role: 'user' as const,
+  page_permissions: [],
+  is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
 }
 
 describe('useAuthStore', () => {

@@ -27,5 +27,10 @@ export const Route = createFileRoute('/_authenticated')({
       },
     })
   },
+  pendingComponent: () => (
+    <div className='flex min-h-svh items-center justify-center text-sm text-muted-foreground'>
+      Loading...
+    </div>
+  ),
   component: AuthenticatedLayout,
 })

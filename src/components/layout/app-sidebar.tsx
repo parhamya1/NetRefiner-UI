@@ -117,7 +117,7 @@ export function AppSidebar() {
   const { data: menuTree } = useQuery({
     queryKey: QUERY_KEYS.pages.menuTree,
     queryFn: getMenuTree,
-    enabled: !!auth.accessToken,
+    enabled: !!auth.accessToken && !!auth.user,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })

@@ -49,6 +49,7 @@ export const useAuthStore = create<AuthState>()((set) => {
             ...state,
             auth: {
               ...state.auth,
+              user: null,
               accessToken: '',
             },
           }

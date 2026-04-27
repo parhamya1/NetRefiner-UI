@@ -6,7 +6,7 @@ import type {
   EntityRowsResponse,
 } from '@/types/api'
 
-export async function listEntities(): Promise<EntityReference[]> {
+export async function getEntities(): Promise<EntityReference[]> {
   const { data } = await apiClient.get<EntityReference[]>('/entities')
   return data
 }
@@ -39,3 +39,6 @@ export async function queryEntityRows(
   )
   return data
 }
+
+
+export const listEntities = getEntities

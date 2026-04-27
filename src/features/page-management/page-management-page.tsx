@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { getEntities } from '@/lib/api/entities'
 import { getPages } from '@/lib/api/pages'
@@ -30,6 +30,7 @@ export function PageManagementPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingPage, setEditingPage] = useState<Page | null>(null)
   const [deletingPage, setDeletingPage] = useState<Page | null>(null)
+  const queryClient = useQueryClient()
 
   const pagesQuery = useQuery({
     queryKey: ['pages', 'management'],
@@ -50,6 +51,7 @@ export function PageManagementPage() {
 
   function refreshList() {
     pagesQuery.refetch()
+    queryClient.invalidateQueries({ queryKey: ['pages', 'menu-tree'] })
   }
 
   function openCreateDialog() {

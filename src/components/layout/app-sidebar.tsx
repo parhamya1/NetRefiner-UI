@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { FileText, FolderKanban, Settings, Users } from 'lucide-react'
 import { getMenuTree } from '@/lib/api/pages'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { useAuthStore } from '@/stores/auth-store'
 import { useLayout } from '@/context/layout-provider'
 import {
@@ -114,10 +115,11 @@ export function AppSidebar() {
   const { auth } = useAuthStore()
 
   const { data: menuTree } = useQuery({
-    queryKey: ['pages', 'menu-tree'],
+    queryKey: QUERY_KEYS.pages.menuTree,
     queryFn: getMenuTree,
     enabled: !!auth.accessToken,
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   })
 
   const navUser = useMemo(

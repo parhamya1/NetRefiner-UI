@@ -28,7 +28,8 @@ import type { AssignedEntity, EntitySummary, Page } from '@/types/api'
 type PageFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  onSuccess: () => Promise<void>
+  onCreated?: (slug: string) => void
   pages: Page[]
   entities: EntitySummary[]
   page?: Page | null
@@ -51,6 +52,7 @@ export function PageFormDialog({
   pages,
   entities,
   page,
+  onCreated,
 }: PageFormDialogProps) {
   const isEdit = !!page
   const [title, setTitle] = useState(() => page?.title ?? '')
@@ -84,10 +86,14 @@ export function PageFormDialog({
 
       return createPage(payload)
     },
-    onSuccess: () => {
+    onSuccess: async (savedPage) => {
       toast.success(isEdit ? 'Page updated successfully.' : 'Page created successfully.')
       onOpenChange(false)
-      onSuccess()
+      await onSuccess()
+
+      if (!isEdit) {
+        onCreated?.(savedPage.slug)
+      }
     },
     onError: handleServerError,
   })

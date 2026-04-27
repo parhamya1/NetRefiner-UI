@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { getEntities } from '@/lib/api/entities'
 import { getPages } from '@/lib/api/pages'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -31,14 +33,15 @@ export function PageManagementPage() {
   const [editingPage, setEditingPage] = useState<Page | null>(null)
   const [deletingPage, setDeletingPage] = useState<Page | null>(null)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const pagesQuery = useQuery({
-    queryKey: ['pages', 'management'],
+    queryKey: QUERY_KEYS.pages.management,
     queryFn: getPages,
   })
 
   const entitiesQuery = useQuery({
-    queryKey: ['entities', 'summary'],
+    queryKey: QUERY_KEYS.entities.summary,
     queryFn: getEntities,
   })
 
@@ -49,9 +52,13 @@ export function PageManagementPage() {
     return new Map(pages.map((page) => [page.id, page.title]))
   }, [pages])
 
-  function refreshList() {
-    pagesQuery.refetch()
-    queryClient.invalidateQueries({ queryKey: ['pages', 'menu-tree'] })
+  async function refreshList() {
+    await pagesQuery.refetch()
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
+  }
+
+  function handlePageCreated(slug: string) {
+    navigate({ to: '/pages/$slug', params: { slug } })
   }
 
   function openCreateDialog() {
@@ -174,6 +181,7 @@ export function PageManagementPage() {
             page={editingPage}
             pages={pages}
             entities={entities}
+            onCreated={handlePageCreated}
           />
         ) : null}
 

@@ -9,7 +9,7 @@ import type { Page } from '@/types/api'
 type PageDeleteDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  onSuccess: () => Promise<void>
   page: Page | null
 }
 
@@ -40,10 +40,10 @@ export function PageDeleteDialog({
       if (!page) return
       await deletePage(page.id)
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Page deleted successfully.')
       onOpenChange(false)
-      onSuccess()
+      await onSuccess()
     },
     onError: (error) => {
       toast.error(getDeleteErrorMessage(error))

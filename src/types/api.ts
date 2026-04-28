@@ -197,12 +197,10 @@ export interface ClickHouseSchemaResponse {
 }
 
 export interface RegisterClickHouseTablePayload {
-  data_source_id: string
+  source_id: string
   database: string
   table: string
-  name: string
-  table_name?: string
-  columns?: EntityColumn[]
+  entity_name: string
   [key: string]: unknown
 }
 

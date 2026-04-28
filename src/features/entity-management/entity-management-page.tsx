@@ -205,7 +205,6 @@ export function EntityManagementPage() {
   const [selectedDatabase, setSelectedDatabase] = useState('')
   const [selectedTable, setSelectedTable] = useState('')
   const [registerName, setRegisterName] = useState('')
-  const [registerTableName, setRegisterTableName] = useState('')
 
   const entitiesQuery = useQuery({
     queryKey: QUERY_KEYS.entities.summary,
@@ -503,18 +502,22 @@ export function EntityManagementPage() {
   const registerTableMutation = useMutation({
     mutationFn: () =>
       registerClickHouseTable({
-        data_source_id: selectedDataSourceId,
+        source_id: selectedDataSourceId,
         database: selectedDatabase,
         table: selectedTable,
-        name: registerName,
-        table_name: registerTableName || undefined,
+        entity_name: registerName,
       }),
     onSuccess: async () => {
       toast.success('Table registered as entity.')
       await entitiesQuery.refetch()
       resetCreateState()
     },
-    onError: () => toast.error('Failed to register table.'),
+    onError: (error) => {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      const detail =
+        axiosError.response?.data?.detail ?? axiosError.response?.data ?? 'Failed to register table.'
+      toast.error(JSON.stringify(detail, null, 2))
+    },
   })
 
   function resetCreateState() {
@@ -532,7 +535,6 @@ export function EntityManagementPage() {
     setSelectedDatabase('')
     setSelectedTable('')
     setRegisterName('')
-    setRegisterTableName('')
     setShowConnectionForm(false)
   }
 
@@ -1037,12 +1039,11 @@ export function EntityManagementPage() {
                   </Table>
                 ) : null}
 
-                <div className='grid gap-3 md:grid-cols-2'>
-                  <Input placeholder='Entity name' value={registerName} onChange={(e) => setRegisterName(e.target.value)} />
+                <div className='grid gap-3 md:grid-cols-1'>
                   <Input
-                    placeholder='table_name (optional)'
-                    value={registerTableName}
-                    onChange={(e) => setRegisterTableName(e.target.value)}
+                    placeholder='Entity name'
+                    value={registerName}
+                    onChange={(e) => setRegisterName(e.target.value)}
                   />
                 </div>
 
@@ -1054,6 +1055,7 @@ export function EntityManagementPage() {
                       selectedDataSourceId.length === 0 ||
                       selectedDatabase.length === 0 ||
                       selectedTable.length === 0 ||
+                      schemaColumns.length === 0 ||
                       registerName.length === 0
                     }
                   >

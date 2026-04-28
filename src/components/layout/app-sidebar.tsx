@@ -180,29 +180,31 @@ function buildSidebarData(
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const { auth } = useAuthStore()
+  const currentUserId = auth.user?.id
+  const currentUserRole = auth.user?.role
   const isAdminRole = auth.user?.role === 'admin' || auth.user?.role === 'superadmin'
   const isNormalUser = auth.user?.role === 'user'
 
   const { data: menuTree } = useQuery({
-    queryKey: QUERY_KEYS.pages.menuTree,
+    queryKey: ['pages', 'menu-tree', currentUserId, currentUserRole],
     queryFn: getMenuTree,
-    enabled: !!auth.accessToken && !!auth.user && !isAdminRole,
+    enabled: !!auth.accessToken && !!currentUserId && !isAdminRole,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })
 
   const { data: pages } = useQuery({
-    queryKey: QUERY_KEYS.pages.management,
+    queryKey: [...QUERY_KEYS.pages.management, currentUserId, currentUserRole],
     queryFn: getPages,
-    enabled: !!auth.accessToken && !!auth.user,
+    enabled: !!auth.accessToken && !!currentUserId,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })
 
   const { data: selfPagePermissions } = useQuery({
-    queryKey: ['users', 'page-permissions', auth.user?.id],
-    queryFn: () => getUserPagePermissions(auth.user!.id),
-    enabled: !!auth.accessToken && !!auth.user?.id && isNormalUser,
+    queryKey: ['users', 'page-permissions', 'sidebar', currentUserId, currentUserRole],
+    queryFn: () => getUserPagePermissions(currentUserId!),
+    enabled: !!auth.accessToken && !!currentUserId && isNormalUser,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })

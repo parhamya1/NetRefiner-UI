@@ -21,17 +21,6 @@ import { TeamSwitcher } from './team-switcher'
 import { type MenuTreeNode, type Page, type PagePermission, type UserRole } from '@/types/api'
 import { type NavGroup as NavGroupType, type NavItem, type SidebarData } from './types'
 
-function getPageId(page: Page): string {
-  const withOptionalLegacy = page as Page & { _id?: string }
-  return String(withOptionalLegacy.id ?? withOptionalLegacy._id ?? '')
-}
-
-function getParentId(page: Page): string | null {
-  const withOptionalLegacy = page as Page & { parentId?: string | null }
-  const normalizedParentId = withOptionalLegacy.parent_id ?? withOptionalLegacy.parentId ?? null
-  return normalizedParentId == null ? null : String(normalizedParentId)
-}
-
 function getPermissionPageId(permission: PagePermission): string {
   const withOptionalLegacy = permission as PagePermission & { pageId?: string }
   return String(withOptionalLegacy.page_id ?? withOptionalLegacy.pageId ?? '')
@@ -39,10 +28,10 @@ function getPermissionPageId(permission: PagePermission): string {
 
 function toMenuTreeNode(page: Page, children: MenuTreeNode[]): MenuTreeNode {
   return {
-    id: getPageId(page),
+    id: String(page.id),
     title: page.title,
     slug: page.slug,
-    parent_id: getParentId(page),
+    parent_id: page.parent_id == null ? null : String(page.parent_id),
     menu_order: page.menu_order,
     is_menu_visible: page.is_menu_visible,
     assigned_entities: page.assigned_entities.map((entity) => ({
@@ -58,13 +47,13 @@ function buildMenuTreeFromPages(pages: Page[]): MenuTreeNode[] {
   const roots: MenuTreeNode[] = []
 
   pages.forEach((page) => {
-    const id = getPageId(page)
+    const id = String(page.id)
     map[id] = toMenuTreeNode(page, [])
   })
 
   pages.forEach((page) => {
-    const id = getPageId(page)
-    const parentId = getParentId(page)
+    const id = String(page.id)
+    const parentId = page.parent_id ? String(page.parent_id) : null
 
     if (parentId && map[parentId]) {
       map[parentId].children.push(map[id])
@@ -112,6 +101,17 @@ function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]):
 }
 
 export function buildPermittedPageTree(
+  allPages: Page[],
+  pagePermissions: PagePermission[]
+): {
+  tree: MenuTreeNode[]
+  allowedIds: Set<string>
+  includeIds: Set<string>
+} {
+  return buildPermittedSidebarTree(allPages, pagePermissions)
+}
+
+export function buildPermittedSidebarTree(
   allPages: Page[],
   pagePermissions: PagePermission[]
 ): {
@@ -269,20 +269,20 @@ export function AppSidebar() {
       resolved = buildMenuTreeFromPages(pages ?? [])
     } else if (isNormalUser && pages) {
       const allPages = pages
-      const { tree, allowedIds, includeIds } = buildPermittedPageTree(
+      const currentUserPermissions = auth.user?.page_permissions ?? selfPagePermissions ?? []
+      const { tree, allowedIds, includeIds } = buildPermittedSidebarTree(
         allPages,
-        selfPagePermissions ?? []
+        currentUserPermissions
       )
       resolved = tree
 
       if (import.meta.env.DEV) {
-        const currentUserPermissions = auth.user?.page_permissions ?? selfPagePermissions ?? []
         const filteredPages = allPages.filter((page) => includeIds.has(String(page.id)))
         // eslint-disable-next-line no-console
         console.log(
           'SIDEBAR allPages',
           allPages.map((page) => ({
-            id: page.id,
+            id: String(page.id),
             title: page.title,
             parent_id: page.parent_id,
           }))
@@ -297,7 +297,7 @@ export function AppSidebar() {
         console.log(
           'SIDEBAR filteredPages',
           filteredPages.map((page) => ({
-            id: page.id,
+            id: String(page.id),
             title: page.title,
             parent_id: page.parent_id,
           }))

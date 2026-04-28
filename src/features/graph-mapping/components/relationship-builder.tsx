@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ type RelationshipBuilderProps = {
   onChangeDescription: (value: string) => void
   onChangeBuilder: (value: BuilderState) => void
   onSave: () => void
+  focusNameTick: number
 }
 
 export function RelationshipBuilder({
@@ -31,7 +33,14 @@ export function RelationshipBuilder({
   onChangeDescription,
   onChangeBuilder,
   onSave,
+  focusNameTick,
 }: RelationshipBuilderProps) {
+  const nameInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    nameInputRef.current?.focus()
+  }, [focusNameTick])
+
   return (
     <div className='space-y-4'>
       <Card>
@@ -40,6 +49,7 @@ export function RelationshipBuilder({
         </CardHeader>
         <CardContent className='space-y-3'>
           <Input
+            ref={nameInputRef}
             placeholder='Mapping name (required)'
             value={mappingName}
             onChange={(event) => onChangeName(event.target.value)}

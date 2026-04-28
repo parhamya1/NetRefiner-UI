@@ -285,28 +285,25 @@ export interface EntityDistinctValuesResponse {
   values: Array<string | number | boolean>
 }
 
-export interface GraphMappingNodeData {
-  label: string
-  entity_id: string
-  entity_name: string
-  column: string
-  value: string
-}
-
 export interface GraphMappingNode {
   id: string
+  entity_id: string
+  column: string
+  value: string
+  label: string
+  node_type: 'entity_value' | string
   position: {
     x: number
     y: number
   }
-  data: GraphMappingNodeData
 }
 
 export interface GraphMappingEdge {
   id: string
   source: string
   target: string
-  label?: string
+  label?: string | null
+  edge_type?: 'manual' | string
 }
 
 export interface GraphMapping {

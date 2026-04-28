@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import type { AxiosError } from 'axios'
 import { toast } from 'sonner'
 import { getEntities } from '@/lib/api/entities'
 import {
@@ -16,7 +17,7 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { GraphMappingPayload } from '@/types/api'
+import type { GraphMappingEdge, GraphMappingNode, GraphMappingPayload } from '@/types/api'
 import { GraphPreview } from './components/graph-preview'
 import { MappingList } from './components/mapping-list'
 import { RelationshipBuilder } from './components/relationship-builder'
@@ -164,6 +165,7 @@ export function GraphMappingPage() {
   const [builder, setBuilder] = useState<BuilderState>(EMPTY_BUILDER)
   const [loadedGraph, setLoadedGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
   const [builderHydrated, setBuilderHydrated] = useState(true)
+  const [focusNameTick, setFocusNameTick] = useState(0)
 
   const mappingsQuery = useQuery({
     queryKey: ['graph-mappings', 'list'],
@@ -187,6 +189,59 @@ export function GraphMappingPage() {
   )
 
   const previewGraph = builderHydrated ? generatedGraph : loadedGraph ?? { nodes: [], edges: [] }
+  const hasMinimumBuilderSelections = Boolean(
+    builder.root &&
+    builder.relatedValues.length > 0 &&
+    generatedGraph.nodes.length > 0 &&
+    generatedGraph.edges.length > 0
+  )
+
+  function toPersistedNodes(nodes: GraphNode[]): GraphMappingNode[] {
+    return nodes.map((node) => ({
+      id: node.id,
+      entity_id: node.data.entity_id,
+      column: node.data.column,
+      value: node.data.value,
+      label: node.data.label,
+      node_type: 'entity_value',
+      position: node.position,
+    }))
+  }
+
+  function toPersistedEdges(edges: GraphEdge[]): GraphMappingEdge[] {
+    return edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label ?? null,
+      edge_type: 'manual',
+    }))
+  }
+
+  function toPreviewNodes(nodes: GraphMappingNode[]): GraphNode[] {
+    return nodes.map((node) => ({
+      id: node.id,
+      position: node.position,
+      data: {
+        label: node.label,
+        entity_id: node.entity_id,
+        entity_name: entityNameById.get(node.entity_id) ?? 'Entity',
+        column: node.column,
+        value: node.value,
+        node_type: 'entity_value',
+      },
+    }))
+  }
+
+  function toPreviewEdges(edges: GraphMappingEdge[]): GraphEdge[] {
+    return edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label ?? '',
+      edge_type: 'manual',
+    }))
+  }
 
   const openMutation = useMutation({
     mutationFn: async (mappingId: string) => getGraphMapping(mappingId),
@@ -195,7 +250,9 @@ export function GraphMappingPage() {
       setMappingName(mapping.name)
       setMappingDescription(mapping.description ?? '')
 
-      const hydrated = tryHydrateBuilder(mapping.nodes as GraphNode[], mapping.edges as GraphEdge[])
+      const previewNodes = toPreviewNodes(mapping.nodes as GraphMappingNode[])
+      const previewEdges = toPreviewEdges(mapping.edges as GraphMappingEdge[])
+      const hydrated = tryHydrateBuilder(previewNodes, previewEdges)
       if (hydrated) {
         setBuilder(hydrated)
         setBuilderHydrated(true)
@@ -204,8 +261,8 @@ export function GraphMappingPage() {
         setBuilder(EMPTY_BUILDER)
         setBuilderHydrated(false)
         setLoadedGraph({
-          nodes: mapping.nodes as GraphNode[],
-          edges: mapping.edges as GraphEdge[],
+          nodes: previewNodes,
+          edges: previewEdges,
         })
       }
     },
@@ -217,13 +274,18 @@ export function GraphMappingPage() {
       if (mappingName.trim().length === 0) {
         throw new Error('Mapping name is required before saving.')
       }
+      if (builderHydrated && !hasMinimumBuilderSelections) {
+        throw new Error('Choose root and at least one related value before saving.')
+      }
 
       const payload: GraphMappingPayload = {
         name: mappingName.trim(),
-        description: mappingDescription.trim(),
-        nodes: previewGraph.nodes,
-        edges: previewGraph.edges,
+        description: mappingDescription.trim() || undefined,
+        nodes: toPersistedNodes(previewGraph.nodes),
+        edges: toPersistedEdges(previewGraph.edges),
       }
+      // eslint-disable-next-line no-console
+      console.log('GRAPH MAPPING SAVE PAYLOAD', payload)
 
       if (selectedMappingId) {
         return updateGraphMapping(selectedMappingId, payload)
@@ -235,7 +297,13 @@ export function GraphMappingPage() {
       setSelectedMappingId(result.id)
       await mappingsQuery.refetch()
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to save mapping.'),
+    onError: (error) => {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      // eslint-disable-next-line no-console
+      console.log('GRAPH MAPPING SAVE ERROR', axiosError.response?.data ?? error)
+      const detail = axiosError.response?.data?.detail ?? axiosError.response?.data
+      toast.error(detail ? JSON.stringify(detail, null, 2) : error instanceof Error ? error.message : 'Failed to save mapping.')
+    },
   })
 
   const deleteMutation = useMutation({
@@ -262,6 +330,7 @@ export function GraphMappingPage() {
     setBuilder(EMPTY_BUILDER)
     setLoadedGraph(null)
     setBuilderHydrated(true)
+    setFocusNameTick((current) => current + 1)
     toast.message('Draft started. Set mapping name, root, and related values.')
   }
 
@@ -274,7 +343,7 @@ export function GraphMappingPage() {
         <ProfileDropdown />
       </Header>
 
-      <Main fixed>
+      <Main fixed className='overflow-y-auto'>
         <div>
           <h1 className='text-2xl font-bold tracking-tight'>Relationship Builder</h1>
           <p className='text-muted-foreground'>Guided flow: root → related values → child values.</p>
@@ -306,12 +375,17 @@ export function GraphMappingPage() {
               mappingName={mappingName}
               mappingDescription={mappingDescription}
               builder={builder}
-              saveDisabled={saveMutation.isPending}
+              saveDisabled={
+                saveMutation.isPending ||
+                mappingName.trim().length === 0 ||
+                (builderHydrated && !hasMinimumBuilderSelections)
+              }
               saveLabel={saveMutation.isPending ? 'Saving...' : 'Save Mapping'}
               onChangeName={setMappingName}
               onChangeDescription={setMappingDescription}
               onChangeBuilder={setBuilder}
               onSave={() => saveMutation.mutate()}
+              focusNameTick={focusNameTick}
             />
 
             <Card>

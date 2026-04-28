@@ -23,17 +23,18 @@ import { type NavGroup as NavGroupType, type NavItem, type SidebarData } from '.
 
 function getPageId(page: Page): string {
   const withOptionalLegacy = page as Page & { _id?: string }
-  return withOptionalLegacy.id ?? withOptionalLegacy._id ?? ''
+  return String(withOptionalLegacy.id ?? withOptionalLegacy._id ?? '')
 }
 
 function getParentId(page: Page): string | null {
   const withOptionalLegacy = page as Page & { parentId?: string | null }
-  return withOptionalLegacy.parent_id ?? withOptionalLegacy.parentId ?? null
+  const normalizedParentId = withOptionalLegacy.parent_id ?? withOptionalLegacy.parentId ?? null
+  return normalizedParentId == null ? null : String(normalizedParentId)
 }
 
 function getPermissionPageId(permission: PagePermission): string {
   const withOptionalLegacy = permission as PagePermission & { pageId?: string }
-  return withOptionalLegacy.page_id ?? withOptionalLegacy.pageId ?? ''
+  return String(withOptionalLegacy.page_id ?? withOptionalLegacy.pageId ?? '')
 }
 
 function toMenuTreeNode(page: Page, children: MenuTreeNode[]): MenuTreeNode {
@@ -75,7 +76,10 @@ function buildMenuTreeFromPages(pages: Page[], includeIds?: Set<string>): MenuTr
   return buildNodes(null)
 }
 
-function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]): Set<string> {
+function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]): {
+  allowedIds: Set<string>
+  includeIds: Set<string>
+} {
   const pagesById = new Map(pages.map((page) => [getPageId(page), page]))
   const allowedIds = new Set(
     permissions
@@ -100,20 +104,46 @@ function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]):
     }
   }
 
-  if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
-    console.info('Normal-user sidebar hierarchy debug', {
-      allPages: pages.map((page) => ({
-        id: getPageId(page),
-        title: page.title,
-        parentId: getParentId(page),
-      })),
-      allowedIds: Array.from(allowedIds),
-      includeIds: Array.from(includeIds),
+  return { allowedIds, includeIds }
+}
+
+export function buildPermittedPageTree(
+  allPages: Page[],
+  pagePermissions: PagePermission[]
+): {
+  tree: MenuTreeNode[]
+  allowedIds: Set<string>
+  includeIds: Set<string>
+} {
+  const { allowedIds, includeIds } = getIncludePageIdsForUser(allPages, pagePermissions)
+  const tree = buildMenuTreeFromPages(allPages, includeIds)
+  return { tree, allowedIds, includeIds }
+}
+
+function flattenTreeTitles(nodes: MenuTreeNode[], depth = 0): string[] {
+  return nodes.flatMap((node) => [
+    `${'  '.repeat(depth)}- ${node.title}`,
+    ...flattenTreeTitles(node.children, depth + 1),
+  ])
+}
+
+function extractPagesFromMenuTree(menuTree: MenuTreeNode[] | undefined): Page[] {
+  const flattened: Page[] = []
+  const visit = (node: MenuTreeNode) => {
+    flattened.push({
+      id: String(node.id),
+      title: node.title,
+      slug: node.slug,
+      parent_id: node.parent_id == null ? null : String(node.parent_id),
+      menu_order: node.menu_order,
+      is_menu_visible: node.is_menu_visible,
+      assigned_entities: [],
     })
+    node.children.forEach(visit)
   }
 
-  return includeIds
+  ;(menuTree ?? []).forEach(visit)
+  return flattened
 }
 
 function mapMenuNodeToNavItem(node: MenuTreeNode): NavItem {
@@ -257,9 +287,32 @@ export function AppSidebar() {
 
     if (isAdminRole) {
       resolved = buildMenuTreeFromPages(pages ?? [])
-    } else if (isNormalUser && pages) {
-      const includeIds = getIncludePageIdsForUser(pages, selfPagePermissions ?? [])
-      resolved = buildMenuTreeFromPages(pages, includeIds)
+    } else if (isNormalUser && (pages || menuTree)) {
+      const allPagesMap = new Map<string, Page>()
+      for (const page of [...(pages ?? []), ...extractPagesFromMenuTree(menuTree)]) {
+        allPagesMap.set(getPageId(page), page)
+      }
+
+      const allPages = Array.from(allPagesMap.values())
+      const { tree, allowedIds, includeIds } = buildPermittedPageTree(
+        allPages,
+        selfPagePermissions ?? []
+      )
+      resolved = tree
+
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info('Normal-user sidebar hierarchy debug', {
+          allPages: allPages.map((page) => ({
+            id: getPageId(page),
+            title: page.title,
+            parentId: getParentId(page),
+          })),
+          allowedIds: Array.from(allowedIds),
+          includeIds: Array.from(includeIds),
+          treeTitles: flattenTreeTitles(tree),
+        })
+      }
     }
 
     if (import.meta.env.DEV) {

@@ -12,6 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ClerkRouteRouteImport } from './routes/clerk/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedUserManagementRouteImport } from './routes/_authenticated/user-management'
+import { Route as AuthenticatedPermissionManagementRouteImport } from './routes/_authenticated/permission-management'
+import { Route as AuthenticatedPageManagementRouteImport } from './routes/_authenticated/page-management'
+import { Route as AuthenticatedEntityManagementRouteImport } from './routes/_authenticated/entity-management'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -38,6 +42,7 @@ import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes
 import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_authenticated/settings/display'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
+import { Route as AuthenticatedPagesSlugRouteImport } from './routes/_authenticated/pages/$slug'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 
 const ClerkRouteRoute = ClerkRouteRouteImport.update({
@@ -54,6 +59,30 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedUserManagementRoute =
+  AuthenticatedUserManagementRouteImport.update({
+    id: '/user-management',
+    path: '/user-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPermissionManagementRoute =
+  AuthenticatedPermissionManagementRouteImport.update({
+    id: '/permission-management',
+    path: '/permission-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPageManagementRoute =
+  AuthenticatedPageManagementRouteImport.update({
+    id: '/page-management',
+    path: '/page-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedEntityManagementRoute =
+  AuthenticatedEntityManagementRouteImport.update({
+    id: '/entity-management',
+    path: '/entity-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const errors503Route = errors503RouteImport.update({
   id: '/(errors)/503',
   path: '/503',
@@ -190,6 +219,11 @@ const AuthenticatedSettingsAccountRoute =
     path: '/account',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
+const AuthenticatedPagesSlugRoute = AuthenticatedPagesSlugRouteImport.update({
+  id: '/pages/$slug',
+  path: '/pages/$slug',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
@@ -211,7 +245,12 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/entity-management': typeof AuthenticatedEntityManagementRoute
+  '/page-management': typeof AuthenticatedPageManagementRoute
+  '/permission-management': typeof AuthenticatedPermissionManagementRoute
+  '/user-management': typeof AuthenticatedUserManagementRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/pages/$slug': typeof AuthenticatedPagesSlugRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
@@ -238,8 +277,13 @@ export interface FileRoutesByTo {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/entity-management': typeof AuthenticatedEntityManagementRoute
+  '/page-management': typeof AuthenticatedPageManagementRoute
+  '/permission-management': typeof AuthenticatedPermissionManagementRoute
+  '/user-management': typeof AuthenticatedUserManagementRoute
   '/': typeof AuthenticatedIndexRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/pages/$slug': typeof AuthenticatedPagesSlugRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
@@ -271,8 +315,13 @@ export interface FileRoutesById {
   '/(errors)/404': typeof errors404Route
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
+  '/_authenticated/entity-management': typeof AuthenticatedEntityManagementRoute
+  '/_authenticated/page-management': typeof AuthenticatedPageManagementRoute
+  '/_authenticated/permission-management': typeof AuthenticatedPermissionManagementRoute
+  '/_authenticated/user-management': typeof AuthenticatedUserManagementRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/_authenticated/pages/$slug': typeof AuthenticatedPagesSlugRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/settings/display': typeof AuthenticatedSettingsDisplayRoute
@@ -303,7 +352,12 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/entity-management'
+    | '/page-management'
+    | '/permission-management'
+    | '/user-management'
     | '/errors/$error'
+    | '/pages/$slug'
     | '/settings/account'
     | '/settings/appearance'
     | '/settings/display'
@@ -330,8 +384,13 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/entity-management'
+    | '/page-management'
+    | '/permission-management'
+    | '/user-management'
     | '/'
     | '/errors/$error'
+    | '/pages/$slug'
     | '/settings/account'
     | '/settings/appearance'
     | '/settings/display'
@@ -362,8 +421,13 @@ export interface FileRouteTypes {
     | '/(errors)/404'
     | '/(errors)/500'
     | '/(errors)/503'
+    | '/_authenticated/entity-management'
+    | '/_authenticated/page-management'
+    | '/_authenticated/permission-management'
+    | '/_authenticated/user-management'
     | '/_authenticated/'
     | '/_authenticated/errors/$error'
+    | '/_authenticated/pages/$slug'
     | '/_authenticated/settings/account'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/settings/display'
@@ -415,6 +479,34 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/user-management': {
+      id: '/_authenticated/user-management'
+      path: '/user-management'
+      fullPath: '/user-management'
+      preLoaderRoute: typeof AuthenticatedUserManagementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/permission-management': {
+      id: '/_authenticated/permission-management'
+      path: '/permission-management'
+      fullPath: '/permission-management'
+      preLoaderRoute: typeof AuthenticatedPermissionManagementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/page-management': {
+      id: '/_authenticated/page-management'
+      path: '/page-management'
+      fullPath: '/page-management'
+      preLoaderRoute: typeof AuthenticatedPageManagementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/entity-management': {
+      id: '/_authenticated/entity-management'
+      path: '/entity-management'
+      fullPath: '/entity-management'
+      preLoaderRoute: typeof AuthenticatedEntityManagementRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/(errors)/503': {
@@ -599,6 +691,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsAccountRouteImport
       parentRoute: typeof AuthenticatedSettingsRouteRoute
     }
+    '/_authenticated/pages/$slug': {
+      id: '/_authenticated/pages/$slug'
+      path: '/pages/$slug'
+      fullPath: '/pages/$slug'
+      preLoaderRoute: typeof AuthenticatedPagesSlugRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/errors/$error': {
       id: '/_authenticated/errors/$error'
       path: '/errors/$error'
@@ -634,8 +733,13 @@ const AuthenticatedSettingsRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
+  AuthenticatedEntityManagementRoute: typeof AuthenticatedEntityManagementRoute
+  AuthenticatedPageManagementRoute: typeof AuthenticatedPageManagementRoute
+  AuthenticatedPermissionManagementRoute: typeof AuthenticatedPermissionManagementRoute
+  AuthenticatedUserManagementRoute: typeof AuthenticatedUserManagementRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
+  AuthenticatedPagesSlugRoute: typeof AuthenticatedPagesSlugRoute
   AuthenticatedAppsIndexRoute: typeof AuthenticatedAppsIndexRoute
   AuthenticatedChatsIndexRoute: typeof AuthenticatedChatsIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
@@ -645,8 +749,14 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
+  AuthenticatedEntityManagementRoute: AuthenticatedEntityManagementRoute,
+  AuthenticatedPageManagementRoute: AuthenticatedPageManagementRoute,
+  AuthenticatedPermissionManagementRoute:
+    AuthenticatedPermissionManagementRoute,
+  AuthenticatedUserManagementRoute: AuthenticatedUserManagementRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
+  AuthenticatedPagesSlugRoute: AuthenticatedPagesSlugRoute,
   AuthenticatedAppsIndexRoute: AuthenticatedAppsIndexRoute,
   AuthenticatedChatsIndexRoute: AuthenticatedChatsIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,

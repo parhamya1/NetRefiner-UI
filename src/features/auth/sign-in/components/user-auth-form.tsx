@@ -1,13 +1,16 @@
 import { useState } from 'react'
+import { AxiosError } from 'axios'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Loader2, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { IconFacebook, IconGithub } from '@/assets/brand-icons'
+import { getMe, login } from '@/lib/api/auth'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
-import { sleep, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -34,6 +37,35 @@ interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {
   redirectTo?: string
 }
 
+function resolveSafeRedirectPath(redirectTo?: string): string {
+  if (!redirectTo) return '/'
+  if (!redirectTo.startsWith('/')) return '/'
+  if (redirectTo.startsWith('//')) return '/'
+  return redirectTo
+}
+
+function getLoginErrorMessage(error: unknown) {
+  if (!(error instanceof AxiosError)) {
+    return 'Unable to sign in. Please try again.'
+  }
+
+  const detail = error.response?.data?.detail
+  if (typeof detail === 'string' && detail.length > 0) {
+    return detail
+  }
+
+  const message = error.response?.data?.message
+  if (typeof message === 'string' && message.length > 0) {
+    return message
+  }
+
+  if (error.response?.status === 401) {
+    return 'Invalid email or password.'
+  }
+
+  return 'Unable to sign in. Please try again.'
+}
+
 export function UserAuthForm({
   className,
   redirectTo,
@@ -41,6 +73,7 @@ export function UserAuthForm({
 }: UserAuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { auth } = useAuthStore()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -51,34 +84,39 @@ export function UserAuthForm({
     },
   })
 
-  function onSubmit(data: z.infer<typeof formSchema>) {
+  async function onSubmit(data: z.infer<typeof formSchema>) {
     setIsLoading(true)
+    form.clearErrors('root')
 
-    toast.promise(sleep(2000), {
-      loading: 'Signing in...',
-      success: () => {
-        setIsLoading(false)
+    try {
+      queryClient.removeQueries({ queryKey: ['pages'] })
+      queryClient.removeQueries({ queryKey: ['users', 'page-permissions'] })
 
-        // Mock successful authentication with expiry computed at success time
-        const mockUser = {
-          accountNo: 'ACC001',
-          email: data.email,
-          role: ['user'],
-          exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours from now
-        }
+      const authResponse = await login(data)
+      auth.setAccessToken(authResponse.access_token)
+      auth.setUser(authResponse.user)
 
-        // Set user and access token
-        auth.setUser(mockUser)
-        auth.setAccessToken('mock-access-token')
+      const currentUser = await getMe()
+      auth.setUser(currentUser)
 
-        // Redirect to the stored location or default to dashboard
-        const targetPath = redirectTo || '/'
-        navigate({ to: targetPath, replace: true })
+      const targetPath = resolveSafeRedirectPath(redirectTo)
 
-        return `Welcome back, ${data.email}!`
-      },
-      error: 'Error',
-    })
+      try {
+        await navigate({ to: targetPath, replace: true })
+      } catch {
+        await navigate({ to: '/', replace: true })
+      }
+      toast.success(`Welcome back, ${currentUser.email}!`)
+    } catch (error) {
+      const errorMessage = getLoginErrorMessage(error)
+      form.setError('root', {
+        type: 'server',
+        message: errorMessage,
+      })
+      toast.error(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -120,6 +158,11 @@ export function UserAuthForm({
             </FormItem>
           )}
         />
+        {form.formState.errors.root?.message && (
+          <p className='text-sm font-medium text-destructive'>
+            {form.formState.errors.root.message}
+          </p>
+        )}
         <Button className='mt-2' disabled={isLoading}>
           {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
           Sign in

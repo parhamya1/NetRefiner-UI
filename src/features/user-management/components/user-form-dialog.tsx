@@ -83,6 +83,7 @@ export function UserFormDialog({
         password: password.trim(),
         role,
         is_active: isActive,
+        page_permissions: [],
       }
 
       return createUser(payload)

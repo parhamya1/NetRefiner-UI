@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CaretSortIcon, CheckIcon } from '@radix-ui/react-icons'
+import type { CheckedState } from '@radix-ui/react-checkbox'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
 import { getPages } from '@/lib/api/pages'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import {
   getUserPagePermissions,
   getUsers,
   updateUserPagePermissions,
 } from '@/lib/api/users'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
@@ -34,9 +37,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import {
-  Skeleton
-} from '@/components/ui/skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -100,6 +101,8 @@ function flattenPagesHierarchy(pages: Page[]) {
 }
 
 export function PermissionManagementPage() {
+  const queryClient = useQueryClient()
+  const { auth } = useAuthStore()
   const [userSelectorOpen, setUserSelectorOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [overrides, setOverrides] = useState<Record<string, boolean>>({})
@@ -150,6 +153,22 @@ export function PermissionManagementPage() {
     return map
   }, [permissionsQuery.data])
 
+  const totalPages = flattenedPages.length
+  const selectedPagesCount = useMemo(
+    () =>
+      flattenedPages.filter(({ page }) => {
+        if (page.id in overrides) return overrides[page.id]
+        return permissionMap.get(page.id) ?? false
+      }).length,
+    [flattenedPages, overrides, permissionMap]
+  )
+  const allCheckedState: CheckedState =
+    selectedPagesCount === 0
+      ? false
+      : selectedPagesCount === totalPages
+        ? true
+        : 'indeterminate'
+
   useEffect(() => {
     if (!permissionsQuery.isError) return
 
@@ -187,6 +206,11 @@ export function PermissionManagementPage() {
     onSuccess: async () => {
       toast.success('Permissions updated successfully.')
       await permissionsQuery.refetch()
+
+      if (selectedUserId.length > 0 && selectedUserId === auth.user?.id) {
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
+      }
+
       setOverrides({})
     },
     onError: (error) => {
@@ -197,6 +221,17 @@ export function PermissionManagementPage() {
   const isLoading = usersQuery.isLoading || pagesQuery.isLoading
   const canSave =
     selectedUserId.length > 0 && flattenedPages.length > 0 && !permissionsQuery.isLoading
+
+  function handleToggleAll(checked: CheckedState) {
+    const nextValue = checked === true
+    const nextOverrides: Record<string, boolean> = {}
+
+    for (const { page } of flattenedPages) {
+      nextOverrides[page.id] = nextValue
+    }
+
+    setOverrides(nextOverrides)
+  }
 
   return (
     <>
@@ -321,15 +356,20 @@ export function PermissionManagementPage() {
                 </AlertDescription>
               </Alert>
             ) : (
-              <Table>
-                <TableHeader>
+              <>
+                <div className='mb-3 flex items-center justify-end gap-2'>
+                  <span className='text-sm text-muted-foreground'>All</span>
+                  <Checkbox checked={allCheckedState} onCheckedChange={handleToggleAll} />
+                </div>
+                <Table>
+                  <TableHeader>
                   <TableRow>
                     <TableHead>Page</TableHead>
                     <TableHead>Slug</TableHead>
                     <TableHead className='w-[120px] text-right'>Can View</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                  <TableBody>
                   {flattenedPages.map(({ page, level }) => (
                     <TableRow key={page.id}>
                       <TableCell>
@@ -353,8 +393,9 @@ export function PermissionManagementPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </>
             )}
           </CardContent>
         </Card>

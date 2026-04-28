@@ -29,6 +29,7 @@ export interface UserCreatePayload {
   password: string
   role: UserRole
   is_active: boolean
+  page_permissions?: PagePermission[]
 }
 
 export interface UserUpdatePayload {

@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { FileText, FolderKanban, Settings, ShieldCheck, Users } from 'lucide-react'
-import { getMenuTree } from '@/lib/api/pages'
+import { getMenuTree, getPages } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
+import { getUserPagePermissions } from '@/lib/api/users'
 import { useAuthStore } from '@/stores/auth-store'
 import { useLayout } from '@/context/layout-provider'
 import {
@@ -17,8 +18,69 @@ import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
 import { TeamSwitcher } from './team-switcher'
-import { type MenuTreeNode, type UserRole } from '@/types/api'
+import { type MenuTreeNode, type Page, type PagePermission, type UserRole } from '@/types/api'
 import { type NavGroup as NavGroupType, type NavItem, type SidebarData } from './types'
+
+function toMenuTreeNode(page: Page, children: MenuTreeNode[]): MenuTreeNode {
+  return {
+    id: page.id,
+    title: page.title,
+    slug: page.slug,
+    parent_id: page.parent_id,
+    menu_order: page.menu_order,
+    is_menu_visible: page.is_menu_visible,
+    assigned_entities: page.assigned_entities.map((entity) => ({
+      id: entity.entity_id,
+      name: entity.display_title,
+    })),
+    children,
+  }
+}
+
+function buildMenuTreeFromPages(pages: Page[], includeIds?: Set<string>): MenuTreeNode[] {
+  const filteredPages = pages.filter(
+    (page) => page.is_menu_visible && (!includeIds || includeIds.has(page.id))
+  )
+  const pagesByParent = new Map<string | null, Page[]>()
+
+  for (const page of filteredPages) {
+    const siblings = pagesByParent.get(page.parent_id) ?? []
+    siblings.push(page)
+    pagesByParent.set(page.parent_id, siblings)
+  }
+
+  const buildNodes = (parentId: string | null): MenuTreeNode[] => {
+    const siblings = (pagesByParent.get(parentId) ?? []).sort(
+      (a, b) => a.menu_order - b.menu_order
+    )
+
+    return siblings.map((page) => toMenuTreeNode(page, buildNodes(page.id)))
+  }
+
+  return buildNodes(null)
+}
+
+function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]): Set<string> {
+  const allowedIds = new Set(
+    permissions.filter((permission) => permission.can_view).map((permission) => permission.page_id)
+  )
+
+  if (allowedIds.size === 0) return allowedIds
+
+  const pagesById = new Map(pages.map((page) => [page.id, page]))
+  const includeIds = new Set<string>(allowedIds)
+
+  for (const pageId of allowedIds) {
+    let parentId = pagesById.get(pageId)?.parent_id ?? null
+
+    while (parentId) {
+      includeIds.add(parentId)
+      parentId = pagesById.get(parentId)?.parent_id ?? null
+    }
+  }
+
+  return includeIds
+}
 
 function mapMenuNodeToNavItem(node: MenuTreeNode): NavItem {
   const sortedChildren = [...node.children]
@@ -118,11 +180,29 @@ function buildSidebarData(
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const { auth } = useAuthStore()
+  const isAdminRole = auth.user?.role === 'admin' || auth.user?.role === 'superadmin'
+  const isNormalUser = auth.user?.role === 'user'
 
   const { data: menuTree } = useQuery({
     queryKey: QUERY_KEYS.pages.menuTree,
     queryFn: getMenuTree,
+    enabled: !!auth.accessToken && !!auth.user && !isAdminRole,
+    staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
+  })
+
+  const { data: pages } = useQuery({
+    queryKey: QUERY_KEYS.pages.management,
+    queryFn: getPages,
     enabled: !!auth.accessToken && !!auth.user,
+    staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
+  })
+
+  const { data: selfPagePermissions } = useQuery({
+    queryKey: ['users', 'page-permissions', auth.user?.id],
+    queryFn: () => getUserPagePermissions(auth.user!.id),
+    enabled: !!auth.accessToken && !!auth.user?.id && isNormalUser,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })
@@ -136,9 +216,22 @@ export function AppSidebar() {
     [auth.user?.email, auth.user?.full_name]
   )
 
+  const resolvedMenuTree = useMemo(() => {
+    if (isAdminRole) {
+      return buildMenuTreeFromPages(pages ?? [])
+    }
+
+    if (isNormalUser && pages) {
+      const includeIds = getIncludePageIdsForUser(pages, selfPagePermissions ?? [])
+      return buildMenuTreeFromPages(pages, includeIds)
+    }
+
+    return menuTree
+  }, [isAdminRole, isNormalUser, menuTree, pages, selfPagePermissions])
+
   const resolvedSidebarData = useMemo(
-    () => buildSidebarData(menuTree, navUser, auth.user?.role),
-    [auth.user?.role, menuTree, navUser]
+    () => buildSidebarData(resolvedMenuTree, navUser, auth.user?.role),
+    [auth.user?.role, navUser, resolvedMenuTree]
   )
 
   return (

@@ -2,7 +2,6 @@ import { apiClient } from './client'
 import type {
   PagePermission,
   UpdateMyPasswordInput,
-  UpdateUserPagePermissionsInput,
   UpdateUserPasswordInput,
   User,
   UserCreatePayload,
@@ -56,11 +55,11 @@ export async function getUserPagePermissions(
 
 export async function updateUserPagePermissions(
   userId: string,
-  input: UpdateUserPagePermissionsInput
+  permissions: PagePermission[]
 ): Promise<PagePermission[]> {
   const { data } = await apiClient.put<PagePermission[]>(
     `/users/${encodeURIComponent(userId)}/page-permissions`,
-    input
+    { page_permissions: permissions }
   )
   return data
 }

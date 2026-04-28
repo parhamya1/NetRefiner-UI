@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { FileText, FolderKanban, Settings, Users } from 'lucide-react'
+import { FileText, FolderKanban, Settings, ShieldCheck, Users } from 'lucide-react'
 import { getMenuTree } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { useAuthStore } from '@/stores/auth-store'
@@ -88,6 +88,11 @@ function buildManagementNavGroup(role: UserRole | undefined): NavGroupType | nul
         title: 'User Management',
         url: '/user-management',
         icon: Users,
+      },
+      {
+        title: 'Permission Management',
+        url: '/permission-management',
+        icon: ShieldCheck,
       },
     ],
   }

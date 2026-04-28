@@ -1,14 +1,33 @@
+import type { AxiosError } from 'axios'
 import { apiClient } from './client'
 import type {
+  Entity,
+  EntityCreatePayload,
   EntityQueryPayload,
+  EntityDistinctValuesPayload,
+  EntityDistinctValuesResponse,
   EntityReference,
   EntityRowsParams,
   EntityRowsResponse,
 } from '@/types/api'
 
-export async function getEntities(): Promise<EntityReference[]> {
-  const { data } = await apiClient.get<EntityReference[]>('/entities')
+export async function getEntities(): Promise<Entity[]> {
+  const { data } = await apiClient.get<Entity[]>('/entities')
   return data
+}
+
+export async function createEntity(payload: EntityCreatePayload): Promise<Entity> {
+  try {
+    const { data } = await apiClient.post<Entity>('/entities', payload)
+    return data
+  } catch (error) {
+    const axiosError = error as AxiosError<{ detail?: unknown }>
+    // eslint-disable-next-line no-console
+    console.log('CREATE ENTITY ERROR RESPONSE', axiosError.response?.data)
+    // eslint-disable-next-line no-console
+    console.log('CREATE ENTITY SENT PAYLOAD', payload)
+    throw error
+  }
 }
 
 export async function getEntity(entityId: string): Promise<EntityReference> {
@@ -16,6 +35,10 @@ export async function getEntity(entityId: string): Promise<EntityReference> {
     `/entities/${encodeURIComponent(entityId)}`
   )
   return data
+}
+
+export async function deleteEntity(entityId: string): Promise<void> {
+  await apiClient.delete(`/entities/${encodeURIComponent(entityId)}`)
 }
 
 export async function getEntityRows(
@@ -35,6 +58,17 @@ export async function queryEntityRows(
 ): Promise<EntityRowsResponse> {
   const { data } = await apiClient.post<EntityRowsResponse>(
     `/entities/${encodeURIComponent(entityId)}/query`,
+    payload
+  )
+  return data
+}
+
+export async function getEntityDistinctValues(
+  entityId: string,
+  payload: EntityDistinctValuesPayload
+): Promise<EntityDistinctValuesResponse> {
+  const { data } = await apiClient.post<EntityDistinctValuesResponse>(
+    `/entities/${encodeURIComponent(entityId)}/distinct-values`,
     payload
   )
   return data

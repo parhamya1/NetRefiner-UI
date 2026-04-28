@@ -1,31 +1,31 @@
 import { apiClient } from './client'
 import type {
-  ApiUser,
   PagePermission,
   UpdateMyPasswordInput,
   UpdateUserPagePermissionsInput,
   UpdateUserPasswordInput,
-  UserCreateInput,
-  UserUpdateInput,
+  User,
+  UserCreatePayload,
+  UserUpdatePayload,
 } from '@/types/api'
 
-export async function listUsers(): Promise<ApiUser[]> {
-  const { data } = await apiClient.get<ApiUser[]>('/users')
+export async function getUsers(): Promise<User[]> {
+  const { data } = await apiClient.get<User[]>('/users')
   return data
 }
 
-export async function createUser(input: UserCreateInput): Promise<ApiUser> {
-  const { data } = await apiClient.post<ApiUser>('/users', input)
+export async function createUser(payload: UserCreatePayload): Promise<User> {
+  const { data } = await apiClient.post<User>('/users', payload)
   return data
 }
 
 export async function updateUser(
   userId: string,
-  input: UserUpdateInput
-): Promise<ApiUser> {
-  const { data } = await apiClient.put<ApiUser>(
+  payload: UserUpdatePayload
+): Promise<User> {
+  const { data } = await apiClient.put<User>(
     `/users/${encodeURIComponent(userId)}`,
-    input
+    payload
   )
   return data
 }
@@ -64,3 +64,5 @@ export async function updateUserPagePermissions(
   )
   return data
 }
+
+export const listUsers = getUsers

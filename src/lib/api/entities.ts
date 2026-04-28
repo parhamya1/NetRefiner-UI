@@ -4,6 +4,8 @@ import type {
   Entity,
   EntityCreatePayload,
   EntityQueryPayload,
+  EntityDistinctValuesPayload,
+  EntityDistinctValuesResponse,
   EntityReference,
   EntityRowsParams,
   EntityRowsResponse,
@@ -56,6 +58,17 @@ export async function queryEntityRows(
 ): Promise<EntityRowsResponse> {
   const { data } = await apiClient.post<EntityRowsResponse>(
     `/entities/${encodeURIComponent(entityId)}/query`,
+    payload
+  )
+  return data
+}
+
+export async function getEntityDistinctValues(
+  entityId: string,
+  payload: EntityDistinctValuesPayload
+): Promise<EntityDistinctValuesResponse> {
+  const { data } = await apiClient.post<EntityDistinctValuesResponse>(
+    `/entities/${encodeURIComponent(entityId)}/distinct-values`,
     payload
   )
   return data

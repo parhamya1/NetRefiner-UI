@@ -17,9 +17,11 @@ export default defineConfig({
     tailwindcss(),
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
+    alias: [
+      { find: '@xyflow/react/dist/style.css', replacement: path.resolve(__dirname, './src/shims/xyflow-react-style.css') },
+      { find: '@xyflow/react', replacement: path.resolve(__dirname, './src/shims/xyflow-react.tsx') },
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+    ],
   },
   test: {
     silent: 'passed-only',

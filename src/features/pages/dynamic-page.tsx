@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AxiosError } from 'axios'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertCircle, AlertTriangle, ArrowUpDown, Ban, FileX, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -6,6 +6,7 @@ import { deleteEntityRow } from '@/lib/api/entities'
 import { getPageBySlug } from '@/lib/api/pages'
 import { handleServerError } from '@/lib/handle-server-error'
 import { QUERY_KEYS } from '@/lib/query-keys'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -63,6 +64,11 @@ function SectionRowsTable({
   const [rowDialogOpen, setRowDialogOpen] = useState(false)
   const [editingRow, setEditingRow] = useState<Record<string, unknown> | null>(null)
   const [deletingRow, setDeletingRow] = useState<Record<string, unknown> | null>(null)
+  const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
+  const [searchValue, setSearchValue] = useState('')
+  const [debouncedSearchValue, setDebouncedSearchValue] = useState('')
+  const [searchColumnName, setSearchColumnName] = useState('')
+  const previousSearchColumnRef = useRef<string | null>(null)
 
   const {
     columns,
@@ -90,6 +96,22 @@ function SectionRowsTable({
     columns: section.columns,
   })
 
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      setDebouncedSearchValue(searchValue.trim())
+    }, 300)
+    return () => window.clearTimeout(timerId)
+  }, [searchValue])
+
+  const resolvedSearchColumnName =
+    searchColumnName || filterableColumns[0]?.name || ''
+
+  useEffect(() => {
+    if (!resolvedSearchColumnName) return
+    setFilterOperator(resolvedSearchColumnName, 'contains')
+    setFilterValue(resolvedSearchColumnName, debouncedSearchValue)
+  }, [debouncedSearchValue, resolvedSearchColumnName, setFilterOperator, setFilterValue])
+
   function resolveRowId(row: Record<string, unknown>) {
     const value = row.row_id ?? row.id
     if (typeof value === 'string' || typeof value === 'number') {
@@ -98,6 +120,26 @@ function SectionRowsTable({
 
     return null
   }
+
+  function handleSearchColumnChange(nextColumnName: string) {
+    const previousColumnName = previousSearchColumnRef.current
+    if (previousColumnName && previousColumnName !== nextColumnName) {
+      setFilterValue(previousColumnName, '')
+    }
+    previousSearchColumnRef.current = nextColumnName
+    setSearchColumnName(nextColumnName)
+  }
+
+  const selectedRowId = selectedRow ? resolveRowId(selectedRow) : null
+  const activeSelectedRow = useMemo(() => {
+    if (!selectedRow) return null
+
+    if (selectedRowId) {
+      return rows.find((row) => resolveRowId(row) === selectedRowId) ?? null
+    }
+
+    return rows.includes(selectedRow) ? selectedRow : null
+  }, [rows, selectedRow, selectedRowId])
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -157,19 +199,69 @@ function SectionRowsTable({
             Reset filters
           </Button>
           {canManageRows ? (
-            <Button
-              size='sm'
-              onClick={() => {
-                setEditingRow(null)
-                setRowDialogOpen(true)
-              }}
-            >
-              <Plus className='mr-1 size-3.5' />
-              Create Row
-            </Button>
+            <>
+              <Button
+                size='sm'
+                onClick={() => {
+                  setEditingRow(null)
+                  setRowDialogOpen(true)
+                }}
+              >
+                <Plus className='mr-1 size-3.5' />
+                Add Row
+              </Button>
+              <Button
+                size='sm'
+                variant='outline'
+                disabled={!activeSelectedRow}
+                onClick={() => {
+                  if (!activeSelectedRow) return
+                  setEditingRow(activeSelectedRow)
+                  setRowDialogOpen(true)
+                }}
+              >
+                <Pencil className='mr-1 size-3.5' />
+                Edit Row
+              </Button>
+              <Button
+                size='sm'
+                variant='destructive'
+                disabled={!activeSelectedRow}
+                onClick={() => {
+                  if (!activeSelectedRow) return
+                  setDeletingRow(activeSelectedRow)
+                }}
+              >
+                <Trash2 className='mr-1 size-3.5' />
+                Delete Row
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
+
+      {filterableColumns.length > 0 ? (
+        <div className='flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center'>
+          <Input
+            className='sm:max-w-sm'
+            placeholder='Search table...'
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+          />
+          <Select value={resolvedSearchColumnName} onValueChange={handleSearchColumnChange}>
+            <SelectTrigger className='sm:w-56'>
+              <SelectValue placeholder='Search column' />
+            </SelectTrigger>
+            <SelectContent>
+              {filterableColumns.map((column) => (
+                <SelectItem key={`${section.entity_id}-search-column-${column.name}`} value={column.name}>
+                  {getColumnLabel(column)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {filterableColumns.length > 0 && (
         <div className='grid gap-3 rounded-md border p-3 sm:grid-cols-2 xl:grid-cols-3'>
@@ -245,49 +337,30 @@ function SectionRowsTable({
                   </TableHead>
                 )
               })}
-              {canManageRows ? <TableHead className='w-[120px] text-right'>Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length > 0 ? (
               rows.map((row, rowIndex) => (
-                <TableRow key={`${section.entity_id}-row-${rowIndex}`}>
+                <TableRow
+                  key={`${section.entity_id}-row-${rowIndex}`}
+                  onClick={() => setSelectedRow(row)}
+                  className={cn(
+                    'cursor-pointer',
+                    (selectedRowId ? resolveRowId(row) === selectedRowId : selectedRow === row) && 'bg-muted/60'
+                  )}
+                >
                   {columns.map((column) => (
                     <TableCell key={`${section.entity_id}-${rowIndex}-${column.name}`}>
                       {String(row[column.name] ?? '-')}
                     </TableCell>
                   ))}
-                  {canManageRows ? (
-                    <TableCell className='text-right'>
-                      <div className='flex justify-end gap-1'>
-                        <Button
-                          type='button'
-                          size='icon'
-                          variant='outline'
-                          onClick={() => {
-                            setEditingRow(row)
-                            setRowDialogOpen(true)
-                          }}
-                        >
-                          <Pencil className='size-3.5' />
-                        </Button>
-                        <Button
-                          type='button'
-                          size='icon'
-                          variant='destructive'
-                          onClick={() => setDeletingRow(row)}
-                        >
-                          <Trash2 className='size-3.5' />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  ) : null}
                 </TableRow>
               ))
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + (canManageRows ? 1 : 0)}
+                  colSpan={columns.length}
                   className='h-24 text-center text-muted-foreground'
                 >
                   No rows available.

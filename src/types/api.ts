@@ -275,6 +275,54 @@ export interface EntityRowsResponse {
   }
 }
 
+export interface EntityDistinctValuesPayload {
+  column: string
+  search?: string
+  limit?: number
+}
+
+export interface EntityDistinctValuesResponse {
+  values: Array<string | number | boolean>
+}
+
+export interface GraphMappingNode {
+  id: string
+  entity_id: string
+  column: string
+  value: string
+  label: string
+  node_type: 'entity_value' | string
+  position: {
+    x: number
+    y: number
+  }
+}
+
+export interface GraphMappingEdge {
+  id: string
+  source: string
+  target: string
+  label?: string | null
+  edge_type?: 'manual' | string
+}
+
+export interface GraphMapping {
+  id: string
+  name: string
+  description?: string | null
+  nodes: GraphMappingNode[]
+  edges: GraphMappingEdge[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface GraphMappingPayload {
+  name: string
+  description?: string
+  nodes: GraphMappingNode[]
+  edges: GraphMappingEdge[]
+}
+
 export interface UserCreateInput {
   email: string
   full_name: string

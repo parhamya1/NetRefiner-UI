@@ -54,7 +54,7 @@ export function PageManagementPage() {
 
   async function refreshList() {
     await pagesQuery.refetch()
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTreePrefix })
   }
 
   function handlePageCreated(slug: string) {

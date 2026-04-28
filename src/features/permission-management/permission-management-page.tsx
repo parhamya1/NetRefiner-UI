@@ -207,8 +207,20 @@ export function PermissionManagementPage() {
       toast.success('Permissions updated successfully.')
       await permissionsQuery.refetch()
 
-      if (selectedUserId.length > 0 && selectedUserId === auth.user?.id) {
-        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
+      const didInvalidateSidebar =
+        selectedUserId.length > 0 && selectedUserId === auth.user?.id
+
+      if (didInvalidateSidebar) {
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTreePrefix })
+      }
+
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info('Permission save context', {
+          selectedUserId,
+          currentUserId: auth.user?.id ?? null,
+          didInvalidateSidebar,
+        })
       }
 
       setOverrides({})

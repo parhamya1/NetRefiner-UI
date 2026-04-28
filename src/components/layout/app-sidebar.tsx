@@ -180,29 +180,40 @@ function buildSidebarData(
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const { auth } = useAuthStore()
+  const currentUserId = auth.user?.id
+  const currentUserRole = auth.user?.role
   const isAdminRole = auth.user?.role === 'admin' || auth.user?.role === 'superadmin'
   const isNormalUser = auth.user?.role === 'user'
 
   const { data: menuTree } = useQuery({
-    queryKey: QUERY_KEYS.pages.menuTree,
+    queryKey:
+      currentUserId && currentUserRole
+        ? QUERY_KEYS.pages.menuTree(currentUserId, currentUserRole)
+        : [...QUERY_KEYS.pages.menuTreePrefix, 'anonymous', 'unknown'],
     queryFn: getMenuTree,
-    enabled: !!auth.accessToken && !!auth.user && !isAdminRole,
+    enabled: !!auth.accessToken && !!currentUserId && !isAdminRole,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })
 
   const { data: pages } = useQuery({
-    queryKey: QUERY_KEYS.pages.management,
+    queryKey:
+      currentUserId && currentUserRole
+        ? QUERY_KEYS.pages.sidebarFullPages(currentUserId, currentUserRole)
+        : [...QUERY_KEYS.pages.management, 'anonymous', 'unknown'],
     queryFn: getPages,
-    enabled: !!auth.accessToken && !!auth.user,
+    enabled: !!auth.accessToken && !!currentUserId,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })
 
   const { data: selfPagePermissions } = useQuery({
-    queryKey: ['users', 'page-permissions', auth.user?.id],
-    queryFn: () => getUserPagePermissions(auth.user!.id),
-    enabled: !!auth.accessToken && !!auth.user?.id && isNormalUser,
+    queryKey:
+      currentUserId && currentUserRole
+        ? QUERY_KEYS.users.pagePermissionsForSidebar(currentUserId, currentUserRole)
+        : ['users', 'page-permissions', 'sidebar', 'anonymous', 'unknown'],
+    queryFn: () => getUserPagePermissions(currentUserId!),
+    enabled: !!auth.accessToken && !!currentUserId && isNormalUser,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   })
@@ -217,17 +228,40 @@ export function AppSidebar() {
   )
 
   const resolvedMenuTree = useMemo(() => {
+    let dataSource = 'menu-tree'
+    let resolved = menuTree
+
     if (isAdminRole) {
-      return buildMenuTreeFromPages(pages ?? [])
+      dataSource = 'admin/superadmin -> getPages'
+      resolved = buildMenuTreeFromPages(pages ?? [])
     }
 
     if (isNormalUser && pages) {
+      dataSource = 'normal user -> permissions + ancestors'
       const includeIds = getIncludePageIdsForUser(pages, selfPagePermissions ?? [])
-      return buildMenuTreeFromPages(pages, includeIds)
+      resolved = buildMenuTreeFromPages(pages, includeIds)
     }
 
-    return menuTree
-  }, [isAdminRole, isNormalUser, menuTree, pages, selfPagePermissions])
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info('Sidebar menu resolution', {
+        currentUserId,
+        currentUserRole,
+        dataSource,
+        resolvedPageIds: (resolved ?? []).map((node) => node.id),
+      })
+    }
+
+    return resolved
+  }, [
+    currentUserId,
+    currentUserRole,
+    isAdminRole,
+    isNormalUser,
+    menuTree,
+    pages,
+    selfPagePermissions,
+  ])
 
   const resolvedSidebarData = useMemo(
     () => buildSidebarData(resolvedMenuTree, navUser, auth.user?.role),

@@ -37,6 +37,13 @@ interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {
   redirectTo?: string
 }
 
+function resolveSafeRedirectPath(redirectTo?: string): string {
+  if (!redirectTo) return '/'
+  if (!redirectTo.startsWith('/')) return '/'
+  if (redirectTo.startsWith('//')) return '/'
+  return redirectTo
+}
+
 function getLoginErrorMessage(error: unknown) {
   if (!(error instanceof AxiosError)) {
     return 'Unable to sign in. Please try again.'
@@ -92,8 +99,13 @@ export function UserAuthForm({
       const currentUser = await getMe()
       auth.setUser(currentUser)
 
-      const targetPath = redirectTo || '/'
-      navigate({ to: targetPath, replace: true })
+      const targetPath = resolveSafeRedirectPath(redirectTo)
+
+      try {
+        await navigate({ to: targetPath, replace: true })
+      } catch {
+        await navigate({ to: '/', replace: true })
+      }
       toast.success(`Welcome back, ${currentUser.email}!`)
     } catch (error) {
       const errorMessage = getLoginErrorMessage(error)

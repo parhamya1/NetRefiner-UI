@@ -1,16 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import ReactFlow, {
-  addEdge,
-  applyNodeChanges,
-  Background,
-  Controls,
-  MiniMap,
-  type Edge,
-  type Node,
-} from '@xyflow/react'
 import { toast } from 'sonner'
-import { getEntities, getEntityDistinctValues } from '@/lib/api/entities'
+import { getEntities } from '@/lib/api/entities'
 import {
   createGraphMapping,
   deleteGraphMapping,
@@ -24,37 +15,155 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
-import type { Entity, GraphMapping, GraphMappingPayload } from '@/types/api'
+import type { GraphMappingPayload } from '@/types/api'
+import { GraphPreview } from './components/graph-preview'
+import { MappingList } from './components/mapping-list'
+import { RelationshipBuilder } from './components/relationship-builder'
+import type { BuilderState, GraphEdge, GraphNode } from './types'
 
-type GraphNodeData = {
-  label: string
-  entity_id: string
-  entity_name: string
-  column: string
-  value: string
+const EMPTY_BUILDER: BuilderState = {
+  root: null,
+  relatedEntityId: '',
+  relatedColumn: '',
+  relatedValues: [],
+  childrenByRelatedValue: {},
 }
 
-function toNodeLabel(entityName: string, column: string, value: string) {
-  return `${value}\n${entityName}\n${column}`
+function makeNodeId(entityId: string, column: string, value: string) {
+  return `${entityId}::${column}::${value}`
+}
+
+function buildGeneratedGraph(
+  builder: BuilderState,
+  entityNameById: Map<string, string>
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  if (!builder.root) return { nodes: [], edges: [] }
+
+  const rootId = makeNodeId(builder.root.entityId, builder.root.column, builder.root.value)
+  const nodes: GraphNode[] = [
+    {
+      id: rootId,
+      position: { x: 0, y: 120 },
+      data: {
+        label: builder.root.label,
+        entity_id: builder.root.entityId,
+        entity_name: entityNameById.get(builder.root.entityId) ?? 'Entity',
+        column: builder.root.column,
+        value: builder.root.value,
+        node_type: 'entity_value',
+      },
+    },
+  ]
+  const edges: GraphEdge[] = []
+
+  builder.relatedValues.forEach((relatedValue, relatedIndex) => {
+    const relatedId = makeNodeId(builder.relatedEntityId, builder.relatedColumn, relatedValue)
+    nodes.push({
+      id: relatedId,
+      position: { x: 300, y: 40 + relatedIndex * 120 },
+      data: {
+        label: relatedValue,
+        entity_id: builder.relatedEntityId,
+        entity_name: entityNameById.get(builder.relatedEntityId) ?? 'Entity',
+        column: builder.relatedColumn,
+        value: relatedValue,
+        node_type: 'entity_value',
+      },
+    })
+
+    edges.push({
+      id: `edge-${rootId}-${relatedId}`,
+      source: rootId,
+      target: relatedId,
+      label: '',
+      edge_type: 'manual',
+    })
+
+    const childLayer = builder.childrenByRelatedValue[relatedValue]
+    if (!childLayer) return
+    childLayer.values.forEach((childValue, childIndex) => {
+      const childId = makeNodeId(childLayer.entityId, childLayer.column, `${relatedValue}:${childValue}`)
+      nodes.push({
+        id: childId,
+        position: { x: 600, y: 20 + relatedIndex * 120 + childIndex * 50 },
+        data: {
+          label: childValue,
+          entity_id: childLayer.entityId,
+          entity_name: entityNameById.get(childLayer.entityId) ?? 'Entity',
+          column: childLayer.column,
+          value: childValue,
+          node_type: 'entity_value',
+        },
+      })
+      edges.push({
+        id: `edge-${relatedId}-${childId}`,
+        source: relatedId,
+        target: childId,
+        label: '',
+        edge_type: 'manual',
+      })
+    })
+  })
+
+  return { nodes, edges }
+}
+
+function tryHydrateBuilder(mappingNodes: GraphNode[], mappingEdges: GraphEdge[]): BuilderState | null {
+  const incoming = new Map<string, number>()
+  mappingEdges.forEach((edge) => {
+    incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1)
+  })
+  const rootNode = mappingNodes.find((node) => !incoming.has(node.id))
+  if (!rootNode) return null
+
+  const outgoingFromRoot = mappingEdges.filter((edge) => edge.source === rootNode.id)
+  const relatedValues: string[] = []
+  const childrenByRelatedValue: BuilderState['childrenByRelatedValue'] = {}
+
+  outgoingFromRoot.forEach((edge) => {
+    const relatedNode = mappingNodes.find((node) => node.id === edge.target)
+    if (!relatedNode) return
+    relatedValues.push(relatedNode.data.value)
+    const childEdges = mappingEdges.filter((item) => item.source === relatedNode.id)
+    if (childEdges.length === 0) return
+    const childNodes = childEdges
+      .map((item) => mappingNodes.find((node) => node.id === item.target))
+      .filter((item): item is GraphNode => !!item)
+
+    if (childNodes.length === 0) return
+    childrenByRelatedValue[relatedNode.data.value] = {
+      entityId: childNodes[0].data.entity_id,
+      column: childNodes[0].data.column,
+      values: childNodes.map((item) => item.data.value),
+    }
+  })
+
+  return {
+    root: {
+      entityId: rootNode.data.entity_id,
+      column: rootNode.data.column,
+      value: rootNode.data.value,
+      label: rootNode.data.label,
+    },
+    relatedEntityId: outgoingFromRoot.length > 0
+      ? mappingNodes.find((node) => node.id === outgoingFromRoot[0].target)?.data.entity_id ?? ''
+      : '',
+    relatedColumn: outgoingFromRoot.length > 0
+      ? mappingNodes.find((node) => node.id === outgoingFromRoot[0].target)?.data.column ?? ''
+      : '',
+    relatedValues,
+    childrenByRelatedValue,
+  }
 }
 
 export function GraphMappingPage() {
   const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null)
   const [mappingName, setMappingName] = useState('')
   const [mappingDescription, setMappingDescription] = useState('')
-  const [nodes, setNodes] = useState<Node<GraphNodeData>[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
-  const [nodeEntityId, setNodeEntityId] = useState('')
-  const [nodeColumn, setNodeColumn] = useState('')
-  const [nodeValue, setNodeValue] = useState('')
-  const [nodeValueSearch, setNodeValueSearch] = useState('')
-  const [nodeLabel, setNodeLabel] = useState('')
+  const [builder, setBuilder] = useState<BuilderState>(EMPTY_BUILDER)
+  const [loadedGraph, setLoadedGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
+  const [builderHydrated, setBuilderHydrated] = useState(true)
 
   const mappingsQuery = useQuery({
     queryKey: ['graph-mappings', 'list'],
@@ -66,66 +175,18 @@ export function GraphMappingPage() {
     queryFn: getEntities,
   })
 
-  const selectedEntity = useMemo(
-    () => (entitiesQuery.data ?? []).find((entity) => entity.id === nodeEntityId) ?? null,
-    [entitiesQuery.data, nodeEntityId]
+  const entityNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    ;(entitiesQuery.data ?? []).forEach((entity) => map.set(entity.id, entity.name))
+    return map
+  }, [entitiesQuery.data])
+
+  const generatedGraph = useMemo(
+    () => buildGeneratedGraph(builder, entityNameById),
+    [builder, entityNameById]
   )
 
-  const distinctValuesQuery = useQuery({
-    queryKey: ['graph-mappings', 'distinct-values', nodeEntityId, nodeColumn, nodeValueSearch],
-    queryFn: () =>
-      getEntityDistinctValues(nodeEntityId, {
-        column: nodeColumn,
-        search: nodeValueSearch,
-        limit: 20,
-      }),
-    enabled: nodeEntityId.length > 0 && nodeColumn.length > 0,
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (mappingName.trim().length === 0) {
-        throw new Error('Mapping name is required.')
-      }
-
-      const payload: GraphMappingPayload = {
-        name: mappingName.trim(),
-        description: mappingDescription.trim(),
-        nodes: nodes as GraphMapping['nodes'],
-        edges: edges as GraphMapping['edges'],
-      }
-
-      if (selectedMappingId) {
-        return updateGraphMapping(selectedMappingId, payload)
-      }
-
-      return createGraphMapping(payload)
-    },
-    onSuccess: async (result) => {
-      toast.success('Graph mapping saved.')
-      setSelectedMappingId(result.id)
-      await mappingsQuery.refetch()
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to save graph mapping.')
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: async (mappingId: string) => deleteGraphMapping(mappingId),
-    onSuccess: async () => {
-      toast.success('Graph mapping deleted.')
-      if (selectedMappingId) {
-        setSelectedMappingId(null)
-        setMappingName('')
-        setMappingDescription('')
-        setNodes([])
-        setEdges([])
-      }
-      await mappingsQuery.refetch()
-    },
-    onError: () => toast.error('Failed to delete graph mapping.'),
-  })
+  const previewGraph = builderHydrated ? generatedGraph : loadedGraph ?? { nodes: [], edges: [] }
 
   const openMutation = useMutation({
     mutationFn: async (mappingId: string) => getGraphMapping(mappingId),
@@ -133,58 +194,76 @@ export function GraphMappingPage() {
       setSelectedMappingId(mapping.id)
       setMappingName(mapping.name)
       setMappingDescription(mapping.description ?? '')
-      setNodes(mapping.nodes as Node<GraphNodeData>[])
-      setEdges(mapping.edges as Edge[])
+
+      const hydrated = tryHydrateBuilder(mapping.nodes as GraphNode[], mapping.edges as GraphEdge[])
+      if (hydrated) {
+        setBuilder(hydrated)
+        setBuilderHydrated(true)
+        setLoadedGraph(null)
+      } else {
+        setBuilder(EMPTY_BUILDER)
+        setBuilderHydrated(false)
+        setLoadedGraph({
+          nodes: mapping.nodes as GraphNode[],
+          edges: mapping.edges as GraphEdge[],
+        })
+      }
     },
-    onError: () => toast.error('Failed to load graph mapping.'),
+    onError: () => toast.error('Failed to open mapping.'),
   })
 
-  function addNodeToCanvas() {
-    if (!selectedEntity || nodeColumn.trim().length === 0 || nodeValue.trim().length === 0) {
-      toast.error('Entity, column, and value are required.')
-      return
-    }
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (mappingName.trim().length === 0) {
+        throw new Error('Mapping name is required before saving.')
+      }
 
-    const duplicate = nodes.some((node) => {
-      const data = node.data
-      return (
-        data.entity_id === selectedEntity.id &&
-        data.column === nodeColumn &&
-        data.value === nodeValue
-      )
-    })
-    if (duplicate) {
-      toast.error('This entity/column/value is already added.')
-      return
-    }
+      const payload: GraphMappingPayload = {
+        name: mappingName.trim(),
+        description: mappingDescription.trim(),
+        nodes: previewGraph.nodes,
+        edges: previewGraph.edges,
+      }
 
-    const nextNode: Node<GraphNodeData> = {
-      id: `node-${Date.now()}`,
-      position: { x: 40 + nodes.length * 40, y: 40 + nodes.length * 20 },
-      data: {
-        label: toNodeLabel(selectedEntity.name, nodeColumn, nodeLabel.trim() || nodeValue),
-        entity_id: selectedEntity.id,
-        entity_name: selectedEntity.name,
-        column: nodeColumn,
-        value: nodeValue,
-      },
-    }
+      if (selectedMappingId) {
+        return updateGraphMapping(selectedMappingId, payload)
+      }
+      return createGraphMapping(payload)
+    },
+    onSuccess: async (result) => {
+      toast.success('Graph mapping saved.')
+      setSelectedMappingId(result.id)
+      await mappingsQuery.refetch()
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to save mapping.'),
+  })
 
-    setNodes((current) => [...current, nextNode])
-    setNodeValue('')
-    setNodeLabel('')
-  }
+  const deleteMutation = useMutation({
+    mutationFn: async (mappingId: string) => deleteGraphMapping(mappingId),
+    onSuccess: async () => {
+      toast.success('Mapping deleted.')
+      if (selectedMappingId) {
+        setSelectedMappingId(null)
+        setMappingName('')
+        setMappingDescription('')
+        setBuilder(EMPTY_BUILDER)
+        setLoadedGraph(null)
+        setBuilderHydrated(true)
+      }
+      await mappingsQuery.refetch()
+    },
+    onError: () => toast.error('Failed to delete mapping.'),
+  })
 
-  function startNewMapping() {
+  function createDraft() {
     setSelectedMappingId(null)
     setMappingName('')
     setMappingDescription('')
-    setNodes([])
-    setEdges([])
+    setBuilder(EMPTY_BUILDER)
+    setLoadedGraph(null)
+    setBuilderHydrated(true)
+    toast.message('Draft started. Set mapping name, root, and related values.')
   }
-
-  const distinctValues = distinctValuesQuery.data?.values ?? []
-  const entityColumns = (selectedEntity?.columns ?? []).map((column) => column.name)
 
   return (
     <>
@@ -196,170 +275,54 @@ export function GraphMappingPage() {
       </Header>
 
       <Main fixed>
-        <div className='flex items-center justify-between'>
-          <div>
-            <h1 className='text-2xl font-bold tracking-tight'>Graph Mapping</h1>
-            <p className='text-muted-foreground'>Build relationship maps from entity values.</p>
-          </div>
-          <Button onClick={startNewMapping}>Create Mapping</Button>
+        <div>
+          <h1 className='text-2xl font-bold tracking-tight'>Relationship Builder</h1>
+          <p className='text-muted-foreground'>Guided flow: root → related values → child values.</p>
         </div>
 
-        <div className='grid gap-4 lg:grid-cols-[380px_1fr]'>
-          <Card>
-            <CardHeader>
-              <CardTitle>Mappings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className='text-right'>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(mappingsQuery.data ?? []).map((mapping) => (
-                    <TableRow key={mapping.id}>
-                      <TableCell>{mapping.name}</TableCell>
-                      <TableCell className='text-right'>
-                        <div className='flex justify-end gap-2'>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() => openMutation.mutate(mapping.id)}
-                          >
-                            Open
-                          </Button>
-                          <Button
-                            variant='destructive'
-                            size='sm'
-                            onClick={() => deleteMutation.mutate(mapping.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {(mappingsQuery.data ?? []).length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={2} className='text-center text-muted-foreground'>
-                        No mappings yet.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <div className='grid gap-4 xl:grid-cols-[340px_1fr]'>
+          <MappingList
+            mappings={mappingsQuery.data ?? []}
+            selectedMappingId={selectedMappingId}
+            onCreate={createDraft}
+            onOpen={(mappingId) => openMutation.mutate(mappingId)}
+            onDelete={(mappingId) => deleteMutation.mutate(mappingId)}
+          />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Mapping Editor</CardTitle>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='grid gap-3 md:grid-cols-2'>
-                <Input
-                  placeholder='Mapping name'
-                  value={mappingName}
-                  onChange={(event) => setMappingName(event.target.value)}
-                />
-                <Input
-                  placeholder='Description'
-                  value={mappingDescription}
-                  onChange={(event) => setMappingDescription(event.target.value)}
-                />
-              </div>
+          <div className='space-y-4'>
+            {!builderHydrated ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Loaded mapping</CardTitle>
+                </CardHeader>
+                <CardContent className='text-sm text-muted-foreground'>
+                  This saved mapping could not be fully reconstructed into guided form fields. Showing metadata and graph preview without modifying node structure.
+                </CardContent>
+              </Card>
+            ) : null}
 
-              <div className='grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-5'>
-                <Select
-                  value={nodeEntityId}
-                  onValueChange={(value) => {
-                    setNodeEntityId(value)
-                    setNodeColumn('')
-                    setNodeValue('')
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder='Entity' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(entitiesQuery.data ?? []).map((entity: Entity) => (
-                      <SelectItem key={entity.id} value={entity.id}>
-                        {entity.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={nodeColumn} onValueChange={setNodeColumn}>
-                  <SelectTrigger>
-                    <SelectValue placeholder='Column' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {entityColumns.map((columnName) => (
-                      <SelectItem key={columnName} value={columnName}>
-                        {columnName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder='Search values'
-                  value={nodeValueSearch}
-                  onChange={(event) => setNodeValueSearch(event.target.value)}
-                />
-                <Select
-                  value={nodeValue}
-                  onValueChange={(value) => {
-                    setNodeValue(value)
-                    if (nodeLabel.trim().length === 0) {
-                      setNodeLabel(value)
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder='Value' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {distinctValues.map((value) => {
-                      const stringValue = String(value)
-                      return (
-                        <SelectItem key={stringValue} value={stringValue}>
-                          {stringValue}
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-                <Button onClick={addNodeToCanvas}>Add Node</Button>
-              </div>
+            <RelationshipBuilder
+              entities={entitiesQuery.data ?? []}
+              mappingName={mappingName}
+              mappingDescription={mappingDescription}
+              builder={builder}
+              saveDisabled={saveMutation.isPending}
+              saveLabel={saveMutation.isPending ? 'Saving...' : 'Save Mapping'}
+              onChangeName={setMappingName}
+              onChangeDescription={setMappingDescription}
+              onChangeBuilder={setBuilder}
+              onSave={() => saveMutation.mutate()}
+            />
 
-              <Textarea
-                placeholder='Node label (defaults to selected value)'
-                value={nodeLabel}
-                onChange={(event) => setNodeLabel(event.target.value)}
-              />
-
-              <div className='h-[520px]'>
-                <ReactFlow
-                  nodes={nodes}
-                  edges={edges}
-                  onNodesChange={(changes) => setNodes((current) => applyNodeChanges(changes, current))}
-                  onConnect={(connection) => setEdges((current) => addEdge(connection, current))}
-                >
-                  <Controls />
-                  <MiniMap />
-                  <Background />
-                </ReactFlow>
-              </div>
-
-              <div className='flex justify-end'>
-                <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                  {saveMutation.isPending ? 'Saving...' : 'Save Mapping'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Graph preview</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <GraphPreview nodes={previewGraph.nodes} edges={previewGraph.edges} />
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </Main>
     </>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { AxiosError } from 'axios'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,14 +10,16 @@ import {
   getClickHouseTableSchema,
   getClickHouseTables,
 } from '@/lib/api/data-sources'
-import { createEntity, getEntities } from '@/lib/api/entities'
+import { createEntity, deleteEntity, getEntities, queryEntityRows } from '@/lib/api/entities'
 import {
   confirmCsvImport,
   previewCsvImportWithMetadata,
   registerClickHouseTable,
 } from '@/lib/api/imports'
+import { getPages, updatePage } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { ConfigDrawer } from '@/components/config-drawer'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -52,6 +54,7 @@ import type {
   ClickHouseSchemaColumn,
   Entity,
   EntityColumn,
+  Page,
 } from '@/types/api'
 
 type CreateScenario = 'manual' | 'csv' | 'clickhouse' | null
@@ -179,8 +182,18 @@ function createBlankColumn(): EntityColumn {
 }
 
 export function EntityManagementPage() {
+  const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [scenario, setScenario] = useState<CreateScenario>(null)
+  const [viewDataEntity, setViewDataEntity] = useState<Entity | null>(null)
+  const [viewDataPage, setViewDataPage] = useState(1)
+  const [viewDataPageSize, setViewDataPageSize] = useState(25)
+  const [deleteEntityTarget, setDeleteEntityTarget] = useState<Entity | null>(null)
+  const [assignEntityTarget, setAssignEntityTarget] = useState<Entity | null>(null)
+  const [assignPageId, setAssignPageId] = useState('')
+  const [assignDisplayTitle, setAssignDisplayTitle] = useState('')
+  const [assignFiltersEnabled, setAssignFiltersEnabled] = useState(true)
+  const [assignSortOrder, setAssignSortOrder] = useState(1)
 
   const [manualName, setManualName] = useState('')
   const [manualTableName, setManualTableName] = useState('')
@@ -209,6 +222,28 @@ export function EntityManagementPage() {
   const entitiesQuery = useQuery({
     queryKey: QUERY_KEYS.entities.summary,
     queryFn: getEntities,
+  })
+
+  const assignPagesQuery = useQuery({
+    queryKey: QUERY_KEYS.pages.management,
+    queryFn: getPages,
+    enabled: !!assignEntityTarget,
+  })
+
+  const viewDataQuery = useQuery({
+    queryKey: [
+      'entity-management',
+      'view-data',
+      viewDataEntity?.id,
+      viewDataPage,
+      viewDataPageSize,
+    ],
+    queryFn: () =>
+      queryEntityRows(viewDataEntity!.id, {
+        page: viewDataPage,
+        page_size: viewDataPageSize,
+      }),
+    enabled: !!viewDataEntity,
   })
 
   const dataSourcesQuery = useQuery({
@@ -520,6 +555,78 @@ export function EntityManagementPage() {
     },
   })
 
+  const deleteEntityMutation = useMutation({
+    mutationFn: async () => {
+      if (!deleteEntityTarget) return
+      await deleteEntity(deleteEntityTarget.id)
+    },
+    onSuccess: async () => {
+      toast.success('Entity deleted.')
+      setDeleteEntityTarget(null)
+      await entitiesQuery.refetch()
+    },
+    onError: (error) => {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      const detail = axiosError.response?.data?.detail ?? axiosError.response?.data
+      toast.error(detail ? JSON.stringify(detail, null, 2) : 'Failed to delete entity.')
+    },
+  })
+
+  const assignEntityMutation = useMutation({
+    mutationFn: async () => {
+      if (!assignEntityTarget || !assignPageId) return
+      const pages = assignPagesQuery.data ?? []
+      const targetPage = pages.find((page) => page.id === assignPageId)
+      if (!targetPage) throw new Error('Selected page was not found.')
+
+      const alreadyAssigned = targetPage.assigned_entities.some(
+        (item) => item.entity_id === assignEntityTarget.id
+      )
+      if (alreadyAssigned) {
+        throw new Error('Entity is already assigned to this page.')
+      }
+
+      const updatedAssignedEntities = [
+        ...targetPage.assigned_entities,
+        {
+          entity_id: assignEntityTarget.id,
+          display_title: assignDisplayTitle.trim(),
+          display_type: 'table',
+          filters_enabled: assignFiltersEnabled,
+          sort_order: assignSortOrder,
+        },
+      ]
+
+      await updatePage(targetPage.id, {
+        title: targetPage.title,
+        slug: targetPage.slug,
+        parent_id: targetPage.parent_id,
+        menu_order: targetPage.menu_order,
+        is_menu_visible: targetPage.is_menu_visible,
+        assigned_entities: updatedAssignedEntities,
+      })
+    },
+    onSuccess: async () => {
+      toast.success('Entity assigned to page.')
+      setAssignEntityTarget(null)
+      setAssignPageId('')
+      setAssignDisplayTitle('')
+      setAssignFiltersEnabled(true)
+      setAssignSortOrder(1)
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.management })
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
+    },
+    onError: (error) => {
+      if (error instanceof Error) {
+        toast.error(error.message)
+        return
+      }
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      const detail = axiosError.response?.data?.detail ?? axiosError.response?.data
+      toast.error(detail ? JSON.stringify(detail, null, 2) : 'Failed to assign entity.')
+    },
+  })
+
   function resetCreateState() {
     setDialogOpen(false)
     setScenario(null)
@@ -549,6 +656,19 @@ export function EntityManagementPage() {
         return next
       })
     )
+  }
+
+  function openViewData(entity: Entity) {
+    setViewDataEntity(entity)
+    setViewDataPage(1)
+  }
+
+  function openAssignDialog(entity: Entity) {
+    setAssignEntityTarget(entity)
+    setAssignDisplayTitle(entity.name)
+    setAssignFiltersEnabled(true)
+    setAssignPageId('')
+    setAssignSortOrder(1)
   }
 
   return (
@@ -603,9 +723,33 @@ export function EntityManagementPage() {
                       </TableCell>
                       <TableCell>{entity.columns?.length ?? '-'}</TableCell>
                       <TableCell className='text-right'>
-                        <Button type='button' variant='outline' size='sm' disabled>
-                          Details
-                        </Button>
+                        <div className='flex justify-end gap-2'>
+                          <Button type='button' variant='outline' size='sm' onClick={() => openViewData(entity)}>
+                            View Data
+                          </Button>
+                          <Button type='button' variant='outline' size='sm' onClick={() => openAssignDialog(entity)}>
+                            Assign to Page
+                          </Button>
+                          {entity.source_type === 'manual' ? (
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              disabled
+                              title='Manual entity editing requires backend update endpoint'
+                            >
+                              Edit
+                            </Button>
+                          ) : null}
+                          <Button
+                            type='button'
+                            variant='destructive'
+                            size='sm'
+                            onClick={() => setDeleteEntityTarget(entity)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -621,6 +765,174 @@ export function EntityManagementPage() {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={!!viewDataEntity} onOpenChange={(open) => !open && setViewDataEntity(null)}>
+          <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-5xl'>
+            <DialogHeader>
+              <DialogTitle>View Data</DialogTitle>
+              <DialogDescription>{viewDataEntity?.name ?? ''}</DialogDescription>
+            </DialogHeader>
+
+            {viewDataQuery.isLoading ? (
+              <div className='space-y-2'>
+                <Skeleton className='h-10 w-full' />
+                <Skeleton className='h-10 w-full' />
+              </div>
+            ) : viewDataQuery.isError ? (
+              <div className='rounded-md border border-destructive/40 p-3 text-sm text-destructive'>
+                Failed to load entity rows.
+              </div>
+            ) : (
+              <>
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table className='min-w-max'>
+                    <TableHeader>
+                      <TableRow>
+                        {(viewDataQuery.data?.columns ?? []).map((column) => (
+                          <TableHead key={`view-col-${column.name}`}>{column.label || column.name}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(viewDataQuery.data?.rows ?? []).length > 0 ? (
+                        (viewDataQuery.data?.rows ?? []).map((row, rowIndex) => (
+                          <TableRow key={`view-row-${rowIndex}`}>
+                            {(viewDataQuery.data?.columns ?? []).map((column) => (
+                              <TableCell key={`view-cell-${rowIndex}-${column.name}`}>
+                                {String(row[column.name] ?? '-')}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={Math.max(viewDataQuery.data?.columns.length ?? 1, 1)} className='py-8 text-center text-muted-foreground'>
+                            No rows found.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center gap-2'>
+                    <span className='text-sm text-muted-foreground'>Page size</span>
+                    <Select
+                      value={String(viewDataPageSize)}
+                      onValueChange={(value) => {
+                        setViewDataPageSize(Number(value))
+                        setViewDataPage(1)
+                      }}
+                    >
+                      <SelectTrigger className='w-24'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[10, 25, 50, 100].map((size) => (
+                          <SelectItem key={size} value={String(size)}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setViewDataPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={viewDataPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className='text-sm text-muted-foreground'>
+                      Page {viewDataPage}
+                    </span>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setViewDataPage((prev) => prev + 1)}
+                      disabled={(viewDataQuery.data?.pagination.returned ?? 0) < viewDataPageSize}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!assignEntityTarget} onOpenChange={(open) => !open && setAssignEntityTarget(null)}>
+          <DialogContent className='sm:max-w-lg'>
+            <DialogHeader>
+              <DialogTitle>Assign to Page</DialogTitle>
+              <DialogDescription>{assignEntityTarget?.name ?? ''}</DialogDescription>
+            </DialogHeader>
+            <div className='space-y-3'>
+              <Select value={assignPageId} onValueChange={(value) => {
+                setAssignPageId(value)
+                const targetPage = (assignPagesQuery.data ?? []).find((page) => page.id === value)
+                if (targetPage) {
+                  const nextSortOrder = targetPage.assigned_entities.reduce(
+                    (max, item) => Math.max(max, item.sort_order),
+                    0
+                  ) + 1
+                  setAssignSortOrder(nextSortOrder)
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder='Select page' />
+                </SelectTrigger>
+                <SelectContent>
+                  {(assignPagesQuery.data ?? []).map((page: Page) => (
+                    <SelectItem key={page.id} value={page.id}>
+                      {page.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder='Display title'
+                value={assignDisplayTitle}
+                onChange={(e) => setAssignDisplayTitle(e.target.value)}
+              />
+              <div className='flex items-center justify-between rounded-md border p-3'>
+                <span className='text-sm'>Filters enabled</span>
+                <Checkbox checked={assignFiltersEnabled} onCheckedChange={(checked) => setAssignFiltersEnabled(checked === true)} />
+              </div>
+              <Input
+                type='number'
+                placeholder='Sort order'
+                value={assignSortOrder}
+                onChange={(e) => setAssignSortOrder(Number(e.target.value || 1))}
+              />
+              <div className='flex justify-end'>
+                <Button
+                  onClick={() => assignEntityMutation.mutate()}
+                  disabled={
+                    assignEntityMutation.isPending ||
+                    assignPageId.length === 0 ||
+                    assignDisplayTitle.trim().length === 0
+                  }
+                >
+                  {assignEntityMutation.isPending ? 'Assigning...' : 'Assign'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <ConfirmDialog
+          open={!!deleteEntityTarget}
+          onOpenChange={(open) => !open && setDeleteEntityTarget(null)}
+          title='Delete entity'
+          desc={`Are you sure you want to delete ${deleteEntityTarget?.name ?? 'this entity'}?`}
+          confirmText='Delete'
+          destructive
+          isLoading={deleteEntityMutation.isPending}
+          handleConfirm={() => deleteEntityMutation.mutate()}
+        />
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-4xl'>

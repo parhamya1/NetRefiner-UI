@@ -35,6 +35,10 @@ export async function getEntity(entityId: string): Promise<EntityReference> {
   return data
 }
 
+export async function deleteEntity(entityId: string): Promise<void> {
+  await apiClient.delete(`/entities/${encodeURIComponent(entityId)}`)
+}
+
 export async function getEntityRows(
   entityId: string,
   params?: EntityRowsParams

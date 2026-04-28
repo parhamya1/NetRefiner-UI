@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { AxiosError } from 'axios'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertCircle, AlertTriangle, ArrowUpDown, Ban, FileX, Pencil, Plus, Trash2 } from 'lucide-react'
 import { deleteEntityRow } from '@/lib/api/entities'
 import { getPageBySlug } from '@/lib/api/pages'
 import { handleServerError } from '@/lib/handle-server-error'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { useAuthStore } from '@/stores/auth-store'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -383,17 +384,36 @@ function SectionRowsTable({
 
 export function DynamicPage({ slug }: DynamicPageProps) {
   const pageQuery = useQuery({
-    queryKey: ['pages', 'by-slug', slug],
+    queryKey: QUERY_KEYS.pages.bySlug(slug),
     queryFn: () => getPageBySlug(slug),
     retry: false,
   })
 
   const sections = useMemo(
-    () =>
-      [...(pageQuery.data?.sections ?? [])].sort(
-        (a, b) => a.sort_order - b.sort_order
-      ),
-    [pageQuery.data?.sections]
+    () => {
+      const configuredSections = pageQuery.data?.sections ?? []
+      if (configuredSections.length > 0) {
+        return [...configuredSections].sort(
+          (a, b) => a.sort_order - b.sort_order
+        )
+      }
+
+      const fallbackSections = (pageQuery.data?.assigned_entities ?? []).map((assignedEntity) => ({
+        entity_id: assignedEntity.entity_id,
+        entity_name: assignedEntity.display_title,
+        table_name: '',
+        display_title: assignedEntity.display_title,
+        display_type: assignedEntity.display_type,
+        filters_enabled: assignedEntity.filters_enabled,
+        sort_order: assignedEntity.sort_order,
+        columns: [],
+        data_endpoint: '',
+        query_endpoint: '',
+      }))
+
+      return fallbackSections.sort((a, b) => a.sort_order - b.sort_order)
+    },
+    [pageQuery.data?.assigned_entities, pageQuery.data?.sections]
   )
 
   const pageErrorState = pageQuery.error

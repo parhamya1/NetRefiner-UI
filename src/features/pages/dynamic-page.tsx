@@ -463,11 +463,30 @@ export function DynamicPage({ slug }: DynamicPageProps) {
   })
 
   const sections = useMemo(
-    () =>
-      [...(pageQuery.data?.sections ?? [])].sort(
-        (a, b) => a.sort_order - b.sort_order
-      ),
-    [pageQuery.data?.sections]
+    () => {
+      const configuredSections = pageQuery.data?.sections ?? []
+      if (configuredSections.length > 0) {
+        return [...configuredSections].sort(
+          (a, b) => a.sort_order - b.sort_order
+        )
+      }
+
+      const fallbackSections = (pageQuery.data?.assigned_entities ?? []).map((assignedEntity) => ({
+        entity_id: assignedEntity.entity_id,
+        entity_name: assignedEntity.display_title,
+        table_name: '',
+        display_title: assignedEntity.display_title,
+        display_type: assignedEntity.display_type,
+        filters_enabled: assignedEntity.filters_enabled,
+        sort_order: assignedEntity.sort_order,
+        columns: [],
+        data_endpoint: '',
+        query_endpoint: '',
+      }))
+
+      return fallbackSections.sort((a, b) => a.sort_order - b.sort_order)
+    },
+    [pageQuery.data?.assigned_entities, pageQuery.data?.sections]
   )
 
   const pageErrorState = pageQuery.error

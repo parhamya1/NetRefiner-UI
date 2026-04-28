@@ -17,7 +17,7 @@ import {
   previewCsvImportWithMetadata,
   registerClickHouseTable,
 } from '@/lib/api/imports'
-import { getPage, getPageBySlug, getPages, updatePage } from '@/lib/api/pages'
+import { getPage, getPageBySlug, getPages, updatePageEntities } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -623,7 +623,10 @@ export function EntityManagementPage() {
       const targetPage = pages.find((page) => page.id === assignPageId)
       if (!targetPage) throw new Error('Selected page was not found.')
 
-      const alreadyAssigned = targetPage.assigned_entities.some(
+      const selectedPage = await getPage(targetPage.id)
+      const existingAssignedEntities = selectedPage.assigned_entities ?? []
+
+      const alreadyAssigned = existingAssignedEntities.some(
         (item) => item.entity_id === assignEntityTarget.id
       )
       if (alreadyAssigned) {
@@ -631,33 +634,24 @@ export function EntityManagementPage() {
       }
 
       const updatedAssignedEntities = [
-        ...targetPage.assigned_entities,
+        ...existingAssignedEntities,
         {
           entity_id: assignEntityTarget.id,
-          display_title: assignDisplayTitle.trim(),
+          display_title: assignDisplayTitle.trim() || assignEntityTarget.name,
           display_type: 'table',
-          filters_enabled: assignFiltersEnabled,
+          filters_enabled: true,
           sort_order: assignSortOrder,
         },
       ]
 
-      const payload = {
-        title: targetPage.title,
-        slug: targetPage.slug,
-        parent_id: targetPage.parent_id,
-        menu_order: targetPage.menu_order,
-        is_menu_visible: targetPage.is_menu_visible,
-        assigned_entities: updatedAssignedEntities,
-      }
+      // eslint-disable-next-line no-console
+      console.log('UPDATE PAGE ENTITIES REQUEST URL', `/pages/${targetPage.id}/entities`)
+      // eslint-disable-next-line no-console
+      console.log('UPDATE PAGE ENTITIES REQUEST BODY', updatedAssignedEntities)
+      await updatePageEntities(targetPage.id, updatedAssignedEntities)
 
       // eslint-disable-next-line no-console
-      console.log('UPDATE PAGE PAYLOAD', payload)
-      await updatePage(targetPage.id, payload)
-
-      const pageByIdResponse = await getPage(targetPage.id)
-      // eslint-disable-next-line no-console
-      console.log('PAGE BY ID RESPONSE', pageByIdResponse)
-
+      console.log('PAGE BY ID RESPONSE', await getPage(targetPage.id))
       const pageBySlugResponse = await getPageBySlug(targetPage.slug)
       // eslint-disable-next-line no-console
       console.log('PAGE BY SLUG RESPONSE', pageBySlugResponse)

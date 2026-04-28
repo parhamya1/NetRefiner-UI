@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type {
+  AssignedEntity,
   MenuTreeNode,
   Page,
   PageConfig,
@@ -41,6 +42,17 @@ export async function updatePage(
   const { data } = await apiClient.put<Page>(
     `/pages/${encodeURIComponent(pageId)}`,
     payload
+  )
+  return data
+}
+
+export async function updatePageEntities(
+  pageId: string,
+  assignedEntities: AssignedEntity[]
+): Promise<Page> {
+  const { data } = await apiClient.put<Page>(
+    `/pages/${encodeURIComponent(pageId)}/entities`,
+    assignedEntities
   )
   return data
 }

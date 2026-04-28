@@ -88,6 +88,33 @@ export interface EntitySummary {
   table_name?: string
   [key: string]: unknown
 }
+export interface EntityColumn {
+  original_name?: string
+  suggested_name?: string
+  suggested_type?: string
+  name: string
+  label: string
+  type?: string
+  frontend_type: 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | string
+  clickhouse_type: string
+  is_filterable: boolean
+  [key: string]: unknown
+}
+
+export interface Entity extends EntitySummary {
+  table_name: string
+  source_type?: 'manual' | 'csv' | 'clickhouse' | string
+  columns?: EntityColumn[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface EntityCreatePayload {
+  name: string
+  table_name: string
+  source_type?: 'manual' | 'csv' | 'clickhouse' | string
+  columns: EntityColumn[]
+}
 export interface MenuTreeNode {
   id: string
   title: string
@@ -109,6 +136,74 @@ export interface PageSectionColumn {
   is_filterable: boolean
 }
 
+export interface CsvPreviewResponse {
+  import_id?: string
+  upload_id?: string
+  file_id?: string
+  name?: string
+  entity_name?: string
+  table_name?: string
+  columns: EntityColumn[]
+  sample_rows?: Record<string, unknown>[]
+  rows?: Record<string, unknown>[]
+  [key: string]: unknown
+}
+
+export interface CsvConfirmPayload {
+  import_id?: string
+  upload_id?: string
+  file_id?: string
+  name?: string
+  entity_name: string
+  table_name?: string
+  columns?: EntityColumn[]
+  [key: string]: unknown
+}
+
+export interface ClickHouseDataSource {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  secure: boolean
+  [key: string]: unknown
+}
+
+export interface ClickHouseDataSourceCreatePayload {
+  name: string
+  host: string
+  port: number
+  username: string
+  password: string
+  secure: boolean
+}
+
+export type ClickHouseDatabase = string | { name: string; [key: string]: unknown }
+
+export type ClickHouseTable = string | { name: string; [key: string]: unknown }
+
+export interface ClickHouseSchemaColumn {
+  name: string
+  type: string
+  [key: string]: unknown
+}
+
+export interface ClickHouseSchemaResponse {
+  database?: string
+  table?: string
+  columns: ClickHouseSchemaColumn[]
+  [key: string]: unknown
+}
+
+export interface RegisterClickHouseTablePayload {
+  source_id: string
+  database: string
+  table: string
+  entity_name: string
+  [key: string]: unknown
+}
+
 export interface PageSectionConfig {
   entity_id: string
   entity_name: string
@@ -128,6 +223,7 @@ export interface PageConfig {
   slug: string
   parent_id: string | null
   sections: PageSectionConfig[]
+  assigned_entities?: AssignedEntity[]
 }
 
 export type FilterOperator =
@@ -177,6 +273,54 @@ export interface EntityRowsResponse {
     page_size: number
     returned: number
   }
+}
+
+export interface EntityDistinctValuesPayload {
+  column: string
+  search?: string
+  limit?: number
+}
+
+export interface EntityDistinctValuesResponse {
+  values: Array<string | number | boolean>
+}
+
+export interface GraphMappingNode {
+  id: string
+  entity_id: string
+  column: string
+  value: string
+  label: string
+  node_type: 'entity_value' | string
+  position: {
+    x: number
+    y: number
+  }
+}
+
+export interface GraphMappingEdge {
+  id: string
+  source: string
+  target: string
+  label?: string | null
+  edge_type?: 'manual' | string
+}
+
+export interface GraphMapping {
+  id: string
+  name: string
+  description?: string | null
+  nodes: GraphMappingNode[]
+  edges: GraphMappingEdge[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface GraphMappingPayload {
+  name: string
+  description?: string
+  nodes: GraphMappingNode[]
+  edges: GraphMappingEdge[]
 }
 
 export interface UserCreateInput {

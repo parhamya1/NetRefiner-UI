@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -36,9 +37,14 @@ export function RelatedLayerBuilder({ entities, value, onChange }: RelatedLayerB
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>2) Related layer + 3) Child layer</CardTitle>
+    <Card className='rounded-xl border shadow-sm'>
+      <CardHeader className='space-y-2'>
+        <div className='flex flex-wrap items-center gap-2'>
+          <Badge variant='secondary'>Step 2</Badge>
+          <CardTitle>Related layer</CardTitle>
+          <Badge variant='outline'>Step 3</Badge>
+          <span className='text-sm text-muted-foreground'>Child layer</span>
+        </div>
       </CardHeader>
       <CardContent className='space-y-4'>
         <div className='grid gap-3 md:grid-cols-3'>

@@ -49,6 +49,7 @@ import type {
   ClickHouseDataSourceCreatePayload,
   CsvConfirmPayload,
   CsvPreviewResponse,
+  ClickHouseSchemaColumn,
   Entity,
   EntityColumn,
 } from '@/types/api'
@@ -274,6 +275,11 @@ export function EntityManagementPage() {
   ])
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
+  const databases = Array.isArray(databasesQuery.data) ? databasesQuery.data : []
+  const tables = Array.isArray(tablesQuery.data) ? tablesQuery.data : []
+  const schemaColumns: ClickHouseSchemaColumn[] = Array.isArray(schemaQuery.data?.columns)
+    ? schemaQuery.data.columns
+    : []
   const normalizedManualColumns = useMemo(
     () =>
       manualColumns.map((column) => ({
@@ -967,11 +973,15 @@ export function EntityManagementPage() {
                       <SelectValue placeholder='Select database' />
                     </SelectTrigger>
                     <SelectContent>
-                      {(databasesQuery.data ?? []).map((database) => (
-                        <SelectItem key={database.name} value={database.name}>
-                          {database.name}
-                        </SelectItem>
-                      ))}
+                      {databases.map((database) => {
+                        const databaseName =
+                          typeof database === 'string' ? database : database.name
+                        return (
+                          <SelectItem key={databaseName} value={databaseName}>
+                            {databaseName}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
 
@@ -980,16 +990,35 @@ export function EntityManagementPage() {
                       <SelectValue placeholder='Select table' />
                     </SelectTrigger>
                     <SelectContent>
-                      {(tablesQuery.data ?? []).map((table) => (
-                        <SelectItem key={table.name} value={table.name}>
-                          {table.name}
-                        </SelectItem>
-                      ))}
+                      {tables.map((table) => {
+                        const tableName = typeof table === 'string' ? table : table.name
+                        return (
+                          <SelectItem key={tableName} value={tableName}>
+                            {tableName}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {schemaQuery.data ? (
+                {databasesQuery.isError ? (
+                  <div className='rounded-md border border-destructive/40 p-3 text-sm text-destructive'>
+                    Failed to load databases
+                    <pre className='mt-2 overflow-auto text-xs'>
+                      {JSON.stringify(
+                        (databasesQuery.error as AxiosError<{ detail?: unknown }>)?.response
+                          ?.data?.detail ??
+                          (databasesQuery.error as AxiosError)?.response?.data ??
+                          '',
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                ) : null}
+
+                {schemaColumns.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -998,7 +1027,7 @@ export function EntityManagementPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {schemaQuery.data.map((column) => (
+                      {schemaColumns.map((column) => (
                         <TableRow key={column.name}>
                           <TableCell>{column.name}</TableCell>
                           <TableCell>{column.type}</TableCell>

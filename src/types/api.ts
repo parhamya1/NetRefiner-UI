@@ -179,19 +179,20 @@ export interface ClickHouseDataSourceCreatePayload {
   secure: boolean
 }
 
-export interface ClickHouseDatabase {
-  name: string
-  [key: string]: unknown
-}
+export type ClickHouseDatabase = string | { name: string; [key: string]: unknown }
 
-export interface ClickHouseTable {
-  name: string
-  [key: string]: unknown
-}
+export type ClickHouseTable = string | { name: string; [key: string]: unknown }
 
 export interface ClickHouseSchemaColumn {
   name: string
   type: string
+  [key: string]: unknown
+}
+
+export interface ClickHouseSchemaResponse {
+  database?: string
+  table?: string
+  columns: ClickHouseSchemaColumn[]
   [key: string]: unknown
 }
 

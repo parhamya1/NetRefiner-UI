@@ -3,6 +3,7 @@ import type {
   ClickHouseDataSource,
   ClickHouseDataSourceCreatePayload,
   ClickHouseDatabase,
+  ClickHouseSchemaResponse,
   ClickHouseSchemaColumn,
   ClickHouseTable,
 } from '@/types/api'
@@ -25,29 +26,38 @@ export async function createClickHouseDataSource(
 export async function getClickHouseDatabases(
   dataSourceId: string
 ): Promise<ClickHouseDatabase[]> {
-  const { data } = await apiClient.get<ClickHouseDatabase[]>(
+  const { data } = await apiClient.get<
+    ClickHouseDatabase[] | { databases?: ClickHouseDatabase[] }
+  >(
     `/data-sources/clickhouse/${encodeURIComponent(dataSourceId)}/databases`
   )
-  return data
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.databases)) return data.databases
+  return []
 }
 
 export async function getClickHouseTables(
   dataSourceId: string,
   database: string
 ): Promise<ClickHouseTable[]> {
-  const { data } = await apiClient.get<ClickHouseTable[]>(
+  const { data } = await apiClient.get<ClickHouseTable[] | { tables?: ClickHouseTable[] }>(
     `/data-sources/clickhouse/${encodeURIComponent(dataSourceId)}/databases/${encodeURIComponent(database)}/tables`
   )
-  return data
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.tables)) return data.tables
+  return []
 }
 
 export async function getClickHouseTableSchema(
   dataSourceId: string,
   database: string,
   table: string
-): Promise<ClickHouseSchemaColumn[]> {
-  const { data } = await apiClient.get<ClickHouseSchemaColumn[]>(
+): Promise<ClickHouseSchemaResponse> {
+  const { data } = await apiClient.get<ClickHouseSchemaResponse | ClickHouseSchemaColumn[]>(
     `/data-sources/clickhouse/${encodeURIComponent(dataSourceId)}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/schema`
   )
+  if (Array.isArray(data)) {
+    return { database, table, columns: data }
+  }
   return data
 }

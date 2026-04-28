@@ -63,6 +63,53 @@ const FRONTEND_TO_CLICKHOUSE: Record<string, string> = {
   datetime: 'DateTime',
 }
 
+function cleanCsvHeader(value: string): string {
+  return value.replace(/^\uFEFF/, '').trim()
+}
+
+function toColumnName(value: string): string {
+  return cleanCsvHeader(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function inferFrontendType(
+  header: string,
+  sampleRows: Record<string, unknown>[]
+): 'text' | 'number' | 'integer' | 'date' {
+  const cleanedHeader = cleanCsvHeader(header)
+  const values = sampleRows
+    .map((row) => row[header] ?? row[cleanedHeader])
+    .map((value) => (typeof value === 'string' ? value.trim() : value))
+    .filter((value) => value !== '' && value != null)
+
+  if (values.length === 0) return 'text'
+
+  const isInteger = values.every((value) =>
+    typeof value === 'number'
+      ? Number.isInteger(value)
+      : typeof value === 'string' && /^-?\d+$/.test(value)
+  )
+  if (isInteger) return 'integer'
+
+  const isDecimal = values.every((value) =>
+    typeof value === 'number'
+      ? Number.isFinite(value)
+      : typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)
+  )
+  if (isDecimal) return 'number'
+
+  const isDate = values.every((value) => {
+    if (typeof value !== 'string') return false
+    const parsed = Date.parse(value)
+    return Number.isFinite(parsed)
+  })
+  if (isDate) return 'date'
+
+  return 'text'
+}
+
 function createBlankColumn(): EntityColumn {
   return {
     name: '',
@@ -206,7 +253,39 @@ export function EntityManagementPage() {
     },
     onSuccess: (data) => {
       setCsvPreview(data)
-      setCsvColumns(data.columns ?? [])
+      const sampleRows = (data.sample_rows ?? data.rows ?? []) as Record<string, unknown>[]
+
+      const nextColumns =
+        data.columns && data.columns.length > 0
+          ? data.columns.map((column) => {
+              const header = cleanCsvHeader(column.label || column.name)
+              const inferredType =
+                inferFrontendType(column.name || header, sampleRows) ?? 'text'
+              const frontendType = String(column.frontend_type ?? column.type ?? inferredType)
+              return {
+                ...column,
+                name: toColumnName(column.name || header),
+                label: header,
+                type: frontendType,
+                frontend_type: frontendType,
+                clickhouse_type: FRONTEND_TO_CLICKHOUSE[frontendType] ?? column.clickhouse_type ?? 'String',
+                is_filterable: false,
+              }
+            })
+          : Object.keys(sampleRows[0] ?? {}).map((rawHeader) => {
+              const header = cleanCsvHeader(rawHeader)
+              const frontendType = inferFrontendType(rawHeader, sampleRows)
+              return {
+                name: toColumnName(header),
+                label: header,
+                type: frontendType,
+                frontend_type: frontendType,
+                clickhouse_type: FRONTEND_TO_CLICKHOUSE[frontendType],
+                is_filterable: false,
+              } satisfies EntityColumn
+            })
+
+      setCsvColumns(nextColumns)
     },
     onError: (error) => {
       const axiosError = error as AxiosError<{ detail?: unknown }>
@@ -217,22 +296,57 @@ export function EntityManagementPage() {
   })
 
   const csvConfirmMutation = useMutation({
-    mutationFn: () =>
-      confirmCsvImport({
+    mutationFn: () => {
+      const normalizedColumns = csvColumns.map((column) => {
+        const frontendType = String(column.frontend_type)
+        return {
+          ...column,
+          name: column.name.trim(),
+          label: column.label.trim(),
+          type: frontendType,
+          frontend_type: frontendType,
+          clickhouse_type: FRONTEND_TO_CLICKHOUSE[frontendType] ?? column.clickhouse_type,
+          is_filterable: Boolean(column.is_filterable),
+        }
+      })
+
+      const hasMissingRequired = normalizedColumns.some(
+        (column) => !column.name || !column.label || !column.frontend_type
+      )
+      if (hasMissingRequired) {
+        throw new Error('Every CSV column must have name, label, and frontend type.')
+      }
+
+      const nameSet = new Set<string>()
+      for (const column of normalizedColumns) {
+        if (nameSet.has(column.name)) {
+          throw new Error(`Duplicate column name: ${column.name}`)
+        }
+        nameSet.add(column.name)
+      }
+
+      return confirmCsvImport({
         import_id: csvPreview?.import_id,
         upload_id: csvPreview?.upload_id,
         file_id: csvPreview?.file_id,
         name: csvName,
         entity_name: csvName,
         table_name: csvTableName || undefined,
-        columns: csvColumns,
-      }),
+        columns: normalizedColumns,
+      })
+    },
     onSuccess: async () => {
       toast.success('CSV import confirmed.')
       await entitiesQuery.refetch()
       resetCreateState()
     },
-    onError: () => toast.error('CSV confirm failed.'),
+    onError: (error) => {
+      if (error instanceof Error) {
+        toast.error(error.message)
+        return
+      }
+      toast.error('CSV confirm failed.')
+    },
   })
 
   const createConnectionMutation = useMutation({
@@ -509,89 +623,113 @@ export function EntityManagementPage() {
 
                 {csvPreview ? (
                   <div className='space-y-3'>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Label</TableHead>
-                          <TableHead>Frontend Type</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Filterable</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {csvColumns.map((column, index) => (
-                          <TableRow key={column.name}>
-                            <TableCell>{column.name}</TableCell>
-                            <TableCell>
-                              <Input
-                                value={column.label}
-                                onChange={(e) =>
-                                  setCsvColumns((current) =>
-                                    current.map((item, idx) =>
-                                      idx === index ? { ...item, label: e.target.value } : item
-                                    )
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={String(column.frontend_type)}
-                                onValueChange={(value) =>
-                                  setCsvColumns((current) =>
-                                    current.map((item, idx) =>
-                                      idx === index
-                                        ? {
-                                            ...item,
-                                            type: value,
-                                            frontend_type: value,
-                                            clickhouse_type:
-                                              FRONTEND_TO_CLICKHOUSE[value] ?? item.clickhouse_type,
-                                          }
-                                        : item
-                                    )
-                                  )
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Object.keys(FRONTEND_TO_CLICKHOUSE).map((value) => (
-                                    <SelectItem key={value} value={value}>
-                                      {value}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>{column.clickhouse_type ?? column.type ?? '-'}</TableCell>
-                            <TableCell>
-                              <Checkbox
-                                checked={column.is_filterable}
-                                onCheckedChange={(checked) =>
-                                  setCsvColumns((current) =>
-                                    current.map((item, idx) =>
-                                      idx === index
-                                        ? { ...item, is_filterable: checked === true }
-                                        : item
-                                    )
-                                  )
-                                }
-                              />
-                            </TableCell>
+                    <div className='max-h-[420px] overflow-auto rounded-md border'>
+                      <Table className='min-w-max'>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Label</TableHead>
+                            <TableHead>Frontend Type</TableHead>
+                            <TableHead>ClickHouse Type</TableHead>
+                            <TableHead>Filterable</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {csvColumns.map((column, index) => (
+                            <TableRow key={`${column.name}-${index}`}>
+                              <TableCell>
+                                <Input
+                                  value={column.name}
+                                  onChange={(e) =>
+                                    setCsvColumns((current) =>
+                                      current.map((item, idx) =>
+                                        idx === index
+                                          ? { ...item, name: toColumnName(e.target.value) }
+                                          : item
+                                      )
+                                    )
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  value={column.label}
+                                  onChange={(e) =>
+                                    setCsvColumns((current) =>
+                                      current.map((item, idx) =>
+                                        idx === index ? { ...item, label: e.target.value } : item
+                                      )
+                                    )
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={String(column.frontend_type)}
+                                  onValueChange={(value) =>
+                                    setCsvColumns((current) =>
+                                      current.map((item, idx) =>
+                                        idx === index
+                                          ? {
+                                              ...item,
+                                              type: value,
+                                              frontend_type: value,
+                                              clickhouse_type:
+                                                FRONTEND_TO_CLICKHOUSE[value] ??
+                                                item.clickhouse_type,
+                                            }
+                                          : item
+                                      )
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {Object.keys(FRONTEND_TO_CLICKHOUSE).map((value) => (
+                                      <SelectItem key={value} value={value}>
+                                        {value}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>{column.clickhouse_type ?? '-'}</TableCell>
+                              <TableCell>
+                                <Checkbox
+                                  checked={column.is_filterable}
+                                  onCheckedChange={(checked) =>
+                                    setCsvColumns((current) =>
+                                      current.map((item, idx) =>
+                                        idx === index
+                                          ? { ...item, is_filterable: checked === true }
+                                          : item
+                                      )
+                                    )
+                                  }
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
 
                     {(csvPreview.sample_rows ?? csvPreview.rows)?.length ? (
-                      <div className='rounded-md border p-3'>
-                        <p className='mb-2 text-sm font-medium'>Sample Rows</p>
-                        <pre className='overflow-auto text-xs'>
-                          {JSON.stringify(csvPreview.sample_rows ?? csvPreview.rows, null, 2)}
-                        </pre>
+                      <details className='rounded-md border p-3'>
+                        <summary className='cursor-pointer text-sm font-medium'>Sample rows</summary>
+                        <div className='mt-3 max-h-[260px] overflow-auto'>
+                          <pre className='text-xs'>
+                            {JSON.stringify(csvPreview.sample_rows ?? csvPreview.rows, null, 2)}
+                          </pre>
+                        </div>
+                      </details>
+                    ) : null}
+
+                    {csvColumns.length === 0 ? (
+                      <div className='rounded-md border p-3 text-sm text-muted-foreground'>
+                        No columns detected from preview response.
                       </div>
                     ) : null}
 

@@ -88,6 +88,30 @@ export interface EntitySummary {
   table_name?: string
   [key: string]: unknown
 }
+export interface EntityColumn {
+  name: string
+  label: string
+  type?: string
+  frontend_type: 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | string
+  clickhouse_type: string
+  is_filterable: boolean
+  [key: string]: unknown
+}
+
+export interface Entity extends EntitySummary {
+  table_name: string
+  source_type?: 'manual' | 'csv' | 'clickhouse' | string
+  columns?: EntityColumn[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface EntityCreatePayload {
+  name: string
+  table_name: string
+  source_type?: 'manual' | 'csv' | 'clickhouse' | string
+  columns: EntityColumn[]
+}
 export interface MenuTreeNode {
   id: string
   title: string
@@ -107,6 +131,67 @@ export interface PageSectionColumn {
   frontend_type: string
   clickhouse_type: string
   is_filterable: boolean
+}
+
+export interface CsvPreviewResponse {
+  import_id?: string
+  name?: string
+  table_name?: string
+  columns: EntityColumn[]
+  [key: string]: unknown
+}
+
+export interface CsvConfirmPayload {
+  import_id?: string
+  name: string
+  table_name?: string
+  columns?: EntityColumn[]
+  [key: string]: unknown
+}
+
+export interface ClickHouseDataSource {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  secure: boolean
+  [key: string]: unknown
+}
+
+export interface ClickHouseDataSourceCreatePayload {
+  name: string
+  host: string
+  port: number
+  username: string
+  password: string
+  secure: boolean
+}
+
+export interface ClickHouseDatabase {
+  name: string
+  [key: string]: unknown
+}
+
+export interface ClickHouseTable {
+  name: string
+  [key: string]: unknown
+}
+
+export interface ClickHouseSchemaColumn {
+  name: string
+  type: string
+  [key: string]: unknown
+}
+
+export interface RegisterClickHouseTablePayload {
+  data_source_id: string
+  database: string
+  table: string
+  name: string
+  table_name?: string
+  columns?: EntityColumn[]
+  [key: string]: unknown
 }
 
 export interface PageSectionConfig {

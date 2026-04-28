@@ -74,6 +74,45 @@ function toColumnName(value: string): string {
     .replace(/^_+|_+$/g, '')
 }
 
+function getPreviewSampleRows(previewResponse: CsvPreviewResponse): Record<string, unknown>[] {
+  const nestedData = previewResponse.data as
+    | { sample_rows?: Record<string, unknown>[]; rows?: Record<string, unknown>[] }
+    | undefined
+  return (
+    (previewResponse.sample_rows as Record<string, unknown>[] | undefined) ??
+    (previewResponse.sampleRows as Record<string, unknown>[] | undefined) ??
+    (previewResponse.preview_rows as Record<string, unknown>[] | undefined) ??
+    (previewResponse.previewRows as Record<string, unknown>[] | undefined) ??
+    (previewResponse.rows as Record<string, unknown>[] | undefined) ??
+    nestedData?.sample_rows ??
+    nestedData?.rows ??
+    []
+  )
+}
+
+function getPreviewColumns(previewResponse: CsvPreviewResponse): EntityColumn[] {
+  const nestedData = previewResponse.data as
+    | { columns?: EntityColumn[]; schema?: EntityColumn[] }
+    | undefined
+  return (
+    (previewResponse.columns as EntityColumn[] | undefined) ??
+    (previewResponse.schema as EntityColumn[] | undefined) ??
+    nestedData?.columns ??
+    nestedData?.schema ??
+    []
+  )
+}
+
+function getPreviewUploadId(previewResponse: CsvPreviewResponse): string | undefined {
+  return (
+    previewResponse.upload_id ??
+    previewResponse.file_id ??
+    (previewResponse.id as string | undefined) ??
+    (previewResponse.data as { upload_id?: string } | undefined)?.upload_id ??
+    (previewResponse.data as { file_id?: string } | undefined)?.file_id
+  )
+}
+
 function inferFrontendType(
   header: string,
   sampleRows: Record<string, unknown>[]
@@ -252,19 +291,22 @@ export function EntityManagementPage() {
       })
     },
     onSuccess: (data) => {
+      // eslint-disable-next-line no-console
+      console.log('CSV PREVIEW RESPONSE', data)
       setCsvPreview(data)
-      const sampleRows = (data.sample_rows ?? data.rows ?? []) as Record<string, unknown>[]
+      const sampleRows = getPreviewSampleRows(data)
+      const columnsFromResponse = getPreviewColumns(data)
 
       const nextColumns =
-        data.columns && data.columns.length > 0
-          ? data.columns.map((column) => {
+        columnsFromResponse.length > 0
+          ? columnsFromResponse.map((column, index) => {
               const header = cleanCsvHeader(column.label || column.name)
               const inferredType =
                 inferFrontendType(column.name || header, sampleRows) ?? 'text'
               const frontendType = String(column.frontend_type ?? column.type ?? inferredType)
               return {
                 ...column,
-                name: toColumnName(column.name || header),
+                name: toColumnName(column.name || header) || `column_${index + 1}`,
                 label: header,
                 type: frontendType,
                 frontend_type: frontendType,
@@ -272,11 +314,11 @@ export function EntityManagementPage() {
                 is_filterable: false,
               }
             })
-          : Object.keys(sampleRows[0] ?? {}).map((rawHeader) => {
+          : Object.keys(sampleRows[0] ?? {}).map((rawHeader, index) => {
               const header = cleanCsvHeader(rawHeader)
               const frontendType = inferFrontendType(rawHeader, sampleRows)
               return {
-                name: toColumnName(header),
+                name: toColumnName(header) || `column_${index + 1}`,
                 label: header,
                 type: frontendType,
                 frontend_type: frontendType,
@@ -297,6 +339,10 @@ export function EntityManagementPage() {
 
   const csvConfirmMutation = useMutation({
     mutationFn: () => {
+      if (csvColumns.length === 0) {
+        throw new Error('Cannot confirm import: no columns detected.')
+      }
+
       const normalizedColumns = csvColumns.map((column) => {
         const frontendType = String(column.frontend_type)
         return {
@@ -325,15 +371,19 @@ export function EntityManagementPage() {
         nameSet.add(column.name)
       }
 
-      return confirmCsvImport({
+      const confirmPayload = {
         import_id: csvPreview?.import_id,
-        upload_id: csvPreview?.upload_id,
+        upload_id: csvPreview ? getPreviewUploadId(csvPreview) : undefined,
         file_id: csvPreview?.file_id,
         name: csvName,
         entity_name: csvName,
         table_name: csvTableName || undefined,
         columns: normalizedColumns,
-      })
+      }
+
+      // eslint-disable-next-line no-console
+      console.log('CSV CONFIRM PAYLOAD', confirmPayload)
+      return confirmCsvImport(confirmPayload)
     },
     onSuccess: async () => {
       toast.success('CSV import confirmed.')
@@ -341,11 +391,15 @@ export function EntityManagementPage() {
       resetCreateState()
     },
     onError: (error) => {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      // eslint-disable-next-line no-console
+      console.log('CSV CONFIRM ERROR', axiosError.response?.data)
       if (error instanceof Error) {
         toast.error(error.message)
         return
       }
-      toast.error('CSV confirm failed.')
+      const detail = axiosError.response?.data?.detail ?? axiosError.response?.data
+      toast.error(detail ? JSON.stringify(detail, null, 2) : 'CSV confirm failed.')
     },
   })
 
@@ -736,7 +790,11 @@ export function EntityManagementPage() {
                     <div className='flex justify-end'>
                       <Button
                         onClick={() => csvConfirmMutation.mutate()}
-                        disabled={csvConfirmMutation.isPending || csvName.trim().length === 0}
+                        disabled={
+                          csvConfirmMutation.isPending ||
+                          csvName.trim().length === 0 ||
+                          csvColumns.length === 0
+                        }
                       >
                         {csvConfirmMutation.isPending ? 'Confirming...' : 'Confirm Import'}
                       </Button>

@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { ComingSoon } from '@/components/coming-soon'
+import { EntityManagementPage } from '@/features/entity-management'
 import { ensureCurrentUser } from '@/lib/auth/ensure-current-user'
 
 export const Route = createFileRoute('/_authenticated/entity-management')({
@@ -22,5 +22,5 @@ export const Route = createFileRoute('/_authenticated/entity-management')({
       params: { error: 'forbidden' },
     })
   },
-  component: ComingSoon,
+  component: EntityManagementPage,
 })

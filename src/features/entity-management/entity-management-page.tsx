@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CaretSortIcon, CheckIcon } from '@radix-ui/react-icons'
 import type { AxiosError } from 'axios'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,6 +19,7 @@ import {
 } from '@/lib/api/imports'
 import { getPages, updatePage } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
+import { cn } from '@/lib/utils'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Header } from '@/components/layout/header'
@@ -30,6 +32,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,6 +47,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -190,6 +201,7 @@ export function EntityManagementPage() {
   const [viewDataPageSize, setViewDataPageSize] = useState(25)
   const [deleteEntityTarget, setDeleteEntityTarget] = useState<Entity | null>(null)
   const [assignEntityTarget, setAssignEntityTarget] = useState<Entity | null>(null)
+  const [assignPageSelectorOpen, setAssignPageSelectorOpen] = useState(false)
   const [assignPageId, setAssignPageId] = useState('')
   const [assignDisplayTitle, setAssignDisplayTitle] = useState('')
   const [assignFiltersEnabled, setAssignFiltersEnabled] = useState(true)
@@ -309,6 +321,38 @@ export function EntityManagementPage() {
   ])
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
+  const assignableLeafPages = useMemo(() => {
+    const pages = assignPagesQuery.data ?? []
+    const pageById = new Map(pages.map((page) => [page.id, page]))
+    const parentIds = new Set(pages.map((page) => page.parent_id).filter((value): value is string => !!value))
+
+    return pages
+      .filter((page) => !parentIds.has(page.id))
+      .map((page) => {
+        const lineage: string[] = []
+        const seen = new Set<string>()
+        let current: Page | undefined = page
+
+        while (current) {
+          if (seen.has(current.id)) break
+          seen.add(current.id)
+          lineage.unshift(current.title)
+          if (!current.parent_id) break
+          current = pageById.get(current.parent_id)
+        }
+
+        return {
+          page,
+          pathLabel: lineage.join(' / '),
+        }
+      })
+      .sort((a, b) => a.pathLabel.localeCompare(b.pathLabel))
+  }, [assignPagesQuery.data])
+
+  const selectedAssignPageOption = useMemo(
+    () => assignableLeafPages.find((option) => option.page.id === assignPageId) ?? null,
+    [assignPageId, assignableLeafPages]
+  )
   const databases = Array.isArray(databasesQuery.data) ? databasesQuery.data : []
   const tables = Array.isArray(tablesQuery.data) ? tablesQuery.data : []
   const schemaColumns: ClickHouseSchemaColumn[] = Array.isArray(schemaQuery.data?.columns)
@@ -605,16 +649,26 @@ export function EntityManagementPage() {
         is_menu_visible: targetPage.is_menu_visible,
         assigned_entities: updatedAssignedEntities,
       })
+
+      return {
+        assignedPageSlug: targetPage.slug,
+      }
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       toast.success('Entity assigned to page.')
       setAssignEntityTarget(null)
+      setAssignPageSelectorOpen(false)
       setAssignPageId('')
       setAssignDisplayTitle('')
       setAssignFiltersEnabled(true)
       setAssignSortOrder(1)
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.management })
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
+      if (result?.assignedPageSlug) {
+        await queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.pages.bySlug(result.assignedPageSlug),
+        })
+      }
     },
     onError: (error) => {
       if (error instanceof Error) {
@@ -667,6 +721,7 @@ export function EntityManagementPage() {
     setAssignEntityTarget(entity)
     setAssignDisplayTitle(entity.name)
     setAssignFiltersEnabled(true)
+    setAssignPageSelectorOpen(false)
     setAssignPageId('')
     setAssignSortOrder(1)
   }
@@ -870,28 +925,64 @@ export function EntityManagementPage() {
               <DialogDescription>{assignEntityTarget?.name ?? ''}</DialogDescription>
             </DialogHeader>
             <div className='space-y-3'>
-              <Select value={assignPageId} onValueChange={(value) => {
-                setAssignPageId(value)
-                const targetPage = (assignPagesQuery.data ?? []).find((page) => page.id === value)
-                if (targetPage) {
-                  const nextSortOrder = targetPage.assigned_entities.reduce(
-                    (max, item) => Math.max(max, item.sort_order),
-                    0
-                  ) + 1
-                  setAssignSortOrder(nextSortOrder)
-                }
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder='Select page' />
-                </SelectTrigger>
-                <SelectContent>
-                  {(assignPagesQuery.data ?? []).map((page: Page) => (
-                    <SelectItem key={page.id} value={page.id}>
-                      {page.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={assignPageSelectorOpen} onOpenChange={setAssignPageSelectorOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant='outline'
+                    role='combobox'
+                    aria-expanded={assignPageSelectorOpen}
+                    className={cn(
+                      'w-full justify-between font-normal',
+                      !selectedAssignPageOption && 'text-muted-foreground'
+                    )}
+                  >
+                    <span className='truncate text-left'>
+                      {selectedAssignPageOption?.pathLabel ?? 'Select leaf page'}
+                    </span>
+                    <CaretSortIcon className='ms-2 size-4 shrink-0 opacity-50' />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className='w-[var(--radix-popover-trigger-width)] p-0' align='start'>
+                  <Command shouldFilter>
+                    <CommandInput placeholder='Search page title or slug' />
+                    <CommandList>
+                      <CommandEmpty>No matching leaf pages.</CommandEmpty>
+                      <CommandGroup>
+                        {assignableLeafPages.map((option) => (
+                          <CommandItem
+                            key={option.page.id}
+                            value={option.page.id}
+                            keywords={[option.pathLabel, option.page.title, option.page.slug]}
+                            onSelect={() => {
+                              setAssignPageId(option.page.id)
+                              const nextSortOrder = option.page.assigned_entities.reduce(
+                                (max, item) => Math.max(max, item.sort_order),
+                                0
+                              ) + 1
+                              setAssignSortOrder(nextSortOrder)
+                              setAssignPageSelectorOpen(false)
+                            }}
+                            className='flex items-start justify-between gap-3'
+                          >
+                            <div className='min-w-0'>
+                              <div className='truncate'>{option.pathLabel}</div>
+                              <div className='truncate text-xs text-muted-foreground'>
+                                /pages/{option.page.slug}
+                              </div>
+                            </div>
+                            <CheckIcon
+                              className={cn(
+                                'size-4',
+                                assignPageId === option.page.id ? 'opacity-100' : 'opacity-0'
+                              )}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <Input
                 placeholder='Display title'
                 value={assignDisplayTitle}

@@ -142,13 +142,35 @@ export function EntityManagementPage() {
   })
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
+  const normalizedManualColumns = useMemo(
+    () =>
+      manualColumns.map((column) => ({
+        name: column.name.trim(),
+        label: column.label.trim(),
+        frontend_type: String(column.frontend_type),
+        clickhouse_type: column.clickhouse_type.trim(),
+        is_filterable: column.is_filterable,
+      })),
+    [manualColumns]
+  )
+  const canSubmitManual =
+    manualName.trim().length > 0 &&
+    manualTableName.trim().length > 0 &&
+    normalizedManualColumns.length > 0 &&
+    normalizedManualColumns.every(
+      (column) =>
+        column.name.length > 0 &&
+        column.label.length > 0 &&
+        column.frontend_type.length > 0 &&
+        column.clickhouse_type.length > 0
+    )
 
   const createManualMutation = useMutation({
     mutationFn: () =>
       createEntity({
-        name: manualName,
-        table_name: manualTableName,
-        columns: manualColumns,
+        name: manualName.trim(),
+        table_name: manualTableName.trim(),
+        columns: normalizedManualColumns,
       }),
     onSuccess: async () => {
       toast.success('Entity created successfully.')
@@ -419,7 +441,7 @@ export function EntityManagementPage() {
                 <div className='flex justify-end'>
                   <Button
                     onClick={() => createManualMutation.mutate()}
-                    disabled={createManualMutation.isPending || manualName.length === 0 || manualTableName.length === 0}
+                    disabled={createManualMutation.isPending || !canSubmitManual}
                   >
                     {createManualMutation.isPending ? 'Creating...' : 'Create Manual Entity'}
                   </Button>

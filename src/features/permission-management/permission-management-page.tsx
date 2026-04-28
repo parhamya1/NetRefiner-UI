@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { CaretSortIcon, CheckIcon } from '@radix-ui/react-icons'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
 import { getPages } from '@/lib/api/pages'
@@ -8,6 +9,7 @@ import {
   getUsers,
   updateUserPagePermissions,
 } from '@/lib/api/users'
+import { cn } from '@/lib/utils'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -15,17 +17,26 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Skeleton
+} from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -89,6 +100,7 @@ function flattenPagesHierarchy(pages: Page[]) {
 }
 
 export function PermissionManagementPage() {
+  const [userSelectorOpen, setUserSelectorOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [overrides, setOverrides] = useState<Record<string, boolean>>({})
 
@@ -102,12 +114,6 @@ export function PermissionManagementPage() {
     queryFn: getPages,
   })
 
-  const permissionsQuery = useQuery({
-    queryKey: ['users', 'page-permissions', selectedUserId],
-    queryFn: () => getUserPagePermissions(selectedUserId),
-    enabled: selectedUserId.length > 0,
-  })
-
   const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data])
   const pages = useMemo(() => pagesQuery.data ?? [], [pagesQuery.data])
 
@@ -115,6 +121,22 @@ export function PermissionManagementPage() {
     () => users.find((user) => user.id === selectedUserId) ?? null,
     [selectedUserId, users]
   )
+
+  const selectedUserDisplay = useMemo(() => {
+    if (!selectedUser) return 'Search and select a user'
+    return selectedUser.full_name?.trim()
+      ? `${selectedUser.full_name} <${selectedUser.email}>`
+      : selectedUser.email
+  }, [selectedUser])
+
+  const permissionsQuery = useQuery({
+    queryKey: ['users', 'page-permissions', selectedUser?.id],
+    queryFn: async () => {
+      if (!selectedUser?.id) return []
+      return getUserPagePermissions(selectedUser.id)
+    },
+    enabled: Boolean(selectedUser?.id),
+  })
 
   const flattenedPages = useMemo(() => flattenPagesHierarchy(pages), [pages])
 
@@ -127,6 +149,26 @@ export function PermissionManagementPage() {
 
     return map
   }, [permissionsQuery.data])
+
+  useEffect(() => {
+    if (!permissionsQuery.isError) return
+
+    const endpoint = selectedUser?.id
+      ? `/api/v1/users/${encodeURIComponent(selectedUser.id)}/page-permissions`
+      : '/api/v1/users/{user_id}/page-permissions'
+    const message = getErrorMessage(permissionsQuery.error)
+
+    toast.error(`Failed to load permissions: ${message}`)
+
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error('Permission load failed', {
+        selectedUserId: selectedUser?.id ?? null,
+        endpoint,
+        message,
+      })
+    }
+  }, [permissionsQuery.error, permissionsQuery.isError, selectedUser?.id])
 
   function getCanView(pageId: string) {
     if (pageId in overrides) return overrides[pageId]
@@ -179,24 +221,69 @@ export function PermissionManagementPage() {
             {usersQuery.isLoading ? (
               <Skeleton className='h-10 w-full' />
             ) : (
-              <Select
-                value={selectedUserId || undefined}
-                onValueChange={(value) => {
-                  setSelectedUserId(value)
-                  setOverrides({})
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder='Select a user' />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.map((user: User) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.full_name} ({user.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={userSelectorOpen} onOpenChange={setUserSelectorOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant='outline'
+                    role='combobox'
+                    aria-expanded={userSelectorOpen}
+                    className={cn(
+                      'w-full justify-between font-normal',
+                      !selectedUser && 'text-muted-foreground'
+                    )}
+                  >
+                    <span className='truncate text-left'>{selectedUserDisplay}</span>
+                    <CaretSortIcon className='ms-2 size-4 shrink-0 opacity-50' />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className='w-[var(--radix-popover-trigger-width)] p-0' align='start'>
+                  <Command shouldFilter>
+                    <CommandInput placeholder='Search and select a user' />
+                    <CommandList>
+                      <CommandEmpty>No users found</CommandEmpty>
+                      <CommandGroup>
+                        {users.map((user: User) => {
+                          const label = user.full_name?.trim()
+                            ? `${user.full_name} <${user.email}>`
+                            : user.email
+
+                          return (
+                            <CommandItem
+                              key={user.id}
+                              value={user.id}
+                              keywords={[user.full_name ?? '', user.email, user.role]}
+                              onSelect={() => {
+                                setSelectedUserId(user.id)
+                                setOverrides({})
+                                setUserSelectorOpen(false)
+                              }}
+                              className='flex items-start justify-between gap-3'
+                            >
+                              <div className='min-w-0'>
+                                <div className='truncate'>{label}</div>
+                                <div className='truncate text-xs text-muted-foreground'>
+                                  {user.email}
+                                </div>
+                              </div>
+                              <div className='flex items-center gap-2'>
+                                <Badge variant='secondary' className='capitalize'>
+                                  {user.role}
+                                </Badge>
+                                <CheckIcon
+                                  className={cn(
+                                    'size-4',
+                                    selectedUserId === user.id ? 'opacity-100' : 'opacity-0'
+                                  )}
+                                />
+                              </div>
+                            </CommandItem>
+                          )
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
           </CardContent>
         </Card>
@@ -223,7 +310,7 @@ export function PermissionManagementPage() {
               <Alert variant='destructive'>
                 <AlertTitle>Unable to load user permissions</AlertTitle>
                 <AlertDescription>
-                  We could not load page permissions for the selected user.
+                  {`We could not load page permissions for the selected user. ${getErrorMessage(permissionsQuery.error)}`}
                 </AlertDescription>
               </Alert>
             ) : selectedUserId.length === 0 ? (

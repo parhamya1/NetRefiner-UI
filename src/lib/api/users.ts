@@ -8,6 +8,24 @@ import type {
   UserUpdatePayload,
 } from '@/types/api'
 
+type PagePermissionsResponse =
+  | PagePermission[]
+  | {
+      page_permissions?: PagePermission[]
+    }
+
+function normalizePagePermissionsResponse(
+  response: PagePermissionsResponse
+): PagePermission[] {
+  if (Array.isArray(response)) return response
+
+  if (response && Array.isArray(response.page_permissions)) {
+    return response.page_permissions
+  }
+
+  return []
+}
+
 export async function getUsers(): Promise<User[]> {
   const { data } = await apiClient.get<User[]>('/users')
   return data
@@ -47,10 +65,11 @@ export async function updateMyPassword(input: UpdateMyPasswordInput): Promise<vo
 export async function getUserPagePermissions(
   userId: string
 ): Promise<PagePermission[]> {
-  const { data } = await apiClient.get<PagePermission[]>(
+  const { data } = await apiClient.get<PagePermissionsResponse>(
     `/users/${encodeURIComponent(userId)}/page-permissions`
   )
-  return data
+
+  return normalizePagePermissionsResponse(data)
 }
 
 export async function updateUserPagePermissions(

@@ -1,13 +1,12 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import ReactFlow, {
-  addEdge,
+  applyNodeChanges,
   Background,
   Controls,
   MiniMap,
-  useEdgesState,
-  useNodesState,
   type Edge,
   type Node,
+  type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -18,36 +17,20 @@ type GraphPreviewProps = {
 }
 
 export function GraphPreview({ generatedNodes, generatedEdges, onNodesUpdate }: GraphPreviewProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(generatedNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(generatedEdges)
-
-  useEffect(() => {
-    setNodes(generatedNodes)
-  }, [generatedNodes, setNodes])
-
-  useEffect(() => {
-    setEdges(generatedEdges)
-  }, [generatedEdges, setEdges])
-
-  useEffect(() => {
-    onNodesUpdate?.(nodes)
-  }, [nodes, onNodesUpdate])
-
-  const onConnect = useCallback(
-    (connection: { source: string; target: string }) => {
-      setEdges((eds) => addEdge({ ...connection, type: 'smoothstep' }, eds))
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      const nextNodes = applyNodeChanges(changes, generatedNodes)
+      onNodesUpdate?.(nextNodes)
     },
-    [setEdges]
+    [generatedNodes, onNodesUpdate]
   )
 
   return (
     <div className='h-[600px] w-full rounded-md border'>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={generatedNodes}
+        edges={generatedEdges}
         onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
         fitView
       >
         <Background />

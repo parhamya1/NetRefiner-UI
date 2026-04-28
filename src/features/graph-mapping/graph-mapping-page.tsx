@@ -214,10 +214,6 @@ export function GraphMappingPage() {
     ...node,
     position: positionOverrides[node.id] ?? node.position,
   }))
-  const previewSignature = [
-    ...positionedPreviewNodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}`),
-    ...previewGraph.edges.map((edge) => edge.id),
-  ].join('|')
   const hasMinimumBuilderSelections = Boolean(
     builder.root &&
     builder.relatedValues.length > 0 &&
@@ -433,7 +429,6 @@ export function GraphMappingPage() {
               </CardHeader>
               <CardContent>
                 <GraphPreview
-                  key={previewSignature}
                   generatedNodes={positionedPreviewNodes}
                   generatedEdges={previewGraph.edges}
                   onNodesUpdate={(nextNodes) =>

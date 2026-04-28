@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import type { AxiosError } from 'axios'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -177,7 +178,12 @@ export function EntityManagementPage() {
       await entitiesQuery.refetch()
       resetCreateState()
     },
-    onError: () => toast.error('Failed to create entity.'),
+    onError: (error) => {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      const detail =
+        axiosError.response?.data?.detail ?? axiosError.response?.data ?? 'Failed to create entity.'
+      toast.error(JSON.stringify(detail, null, 2))
+    },
   })
 
   const csvPreviewMutation = useMutation({

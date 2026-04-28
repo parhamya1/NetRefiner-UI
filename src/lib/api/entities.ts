@@ -1,3 +1,4 @@
+import type { AxiosError } from 'axios'
 import { apiClient } from './client'
 import type {
   Entity,
@@ -14,8 +15,17 @@ export async function getEntities(): Promise<Entity[]> {
 }
 
 export async function createEntity(payload: EntityCreatePayload): Promise<Entity> {
-  const { data } = await apiClient.post<Entity>('/entities', payload)
-  return data
+  try {
+    const { data } = await apiClient.post<Entity>('/entities', payload)
+    return data
+  } catch (error) {
+    const axiosError = error as AxiosError<{ detail?: unknown }>
+    // eslint-disable-next-line no-console
+    console.log('CREATE ENTITY ERROR RESPONSE', axiosError.response?.data)
+    // eslint-disable-next-line no-console
+    console.log('CREATE ENTITY SENT PAYLOAD', payload)
+    throw error
+  }
 }
 
 export async function getEntity(entityId: string): Promise<EntityReference> {

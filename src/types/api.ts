@@ -91,6 +91,7 @@ export interface EntitySummary {
 export interface EntityColumn {
   name: string
   label: string
+  type?: string
   frontend_type: 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | string
   clickhouse_type: string
   is_filterable: boolean
@@ -108,6 +109,7 @@ export interface Entity extends EntitySummary {
 export interface EntityCreatePayload {
   name: string
   table_name: string
+  source_type?: 'manual' | 'csv' | 'clickhouse' | string
   columns: EntityColumn[]
 }
 export interface MenuTreeNode {

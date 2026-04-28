@@ -148,9 +148,11 @@ export function EntityManagementPage() {
       manualColumns.map((column) => ({
         name: column.name.trim(),
         label: column.label.trim(),
+        type: String(column.frontend_type),
         frontend_type: String(column.frontend_type),
-        clickhouse_type: column.clickhouse_type.trim(),
-        is_filterable: column.is_filterable,
+        clickhouse_type:
+          FRONTEND_TO_CLICKHOUSE[String(column.frontend_type)] ?? column.clickhouse_type.trim(),
+        is_filterable: Boolean(column.is_filterable),
       })),
     [manualColumns]
   )
@@ -171,6 +173,7 @@ export function EntityManagementPage() {
       createEntity({
         name: manualName.trim(),
         table_name: manualTableName.trim(),
+        source_type: 'manual',
         columns: normalizedManualColumns,
       }),
     onSuccess: async () => {

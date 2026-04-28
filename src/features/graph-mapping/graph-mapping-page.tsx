@@ -45,7 +45,7 @@ function buildGeneratedGraph(
   const nodes: GraphNode[] = [
     {
       id: rootId,
-      position: { x: 0, y: 120 },
+      position: { x: 0, y: 200 },
       data: {
         label: builder.root.label,
         entity_id: builder.root.entityId,
@@ -62,7 +62,7 @@ function buildGeneratedGraph(
     const relatedId = makeNodeId(builder.relatedEntityId, builder.relatedColumn, relatedValue)
     nodes.push({
       id: relatedId,
-      position: { x: 300, y: 40 + relatedIndex * 120 },
+      position: { x: 420, y: 120 + relatedIndex * 220 },
       data: {
         label: relatedValue,
         entity_id: builder.relatedEntityId,
@@ -83,11 +83,13 @@ function buildGeneratedGraph(
 
     const childLayer = builder.childrenByRelatedValue[relatedValue]
     if (!childLayer) return
+    const totalChildren = childLayer.values.length
+    const childStartY = (120 + relatedIndex * 220) - ((totalChildren - 1) * 120) / 2
     childLayer.values.forEach((childValue, childIndex) => {
       const childId = makeNodeId(childLayer.entityId, childLayer.column, `${relatedValue}:${childValue}`)
       nodes.push({
         id: childId,
-        position: { x: 600, y: 20 + relatedIndex * 120 + childIndex * 50 },
+        position: { x: 900, y: childStartY + childIndex * 120 },
         data: {
           label: childValue,
           entity_id: childLayer.entityId,
@@ -166,6 +168,7 @@ export function GraphMappingPage() {
   const [loadedGraph, setLoadedGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
   const [builderHydrated, setBuilderHydrated] = useState(true)
   const [focusNameTick, setFocusNameTick] = useState(0)
+  const [positionOverrides, setPositionOverrides] = useState<Record<string, { x: number; y: number }>>({})
 
   const mappingsQuery = useQuery({
     queryKey: ['graph-mappings', 'list'],
@@ -189,6 +192,14 @@ export function GraphMappingPage() {
   )
 
   const previewGraph = builderHydrated ? generatedGraph : loadedGraph ?? { nodes: [], edges: [] }
+  const positionedPreviewNodes = previewGraph.nodes.map((node) => ({
+    ...node,
+    position: positionOverrides[node.id] ?? node.position,
+  }))
+  const previewSignature = [
+    ...positionedPreviewNodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}`),
+    ...previewGraph.edges.map((edge) => edge.id),
+  ].join('|')
   const hasMinimumBuilderSelections = Boolean(
     builder.root &&
     builder.relatedValues.length > 0 &&
@@ -257,6 +268,7 @@ export function GraphMappingPage() {
         setBuilder(hydrated)
         setBuilderHydrated(true)
         setLoadedGraph(null)
+        setPositionOverrides({})
       } else {
         setBuilder(EMPTY_BUILDER)
         setBuilderHydrated(false)
@@ -264,6 +276,7 @@ export function GraphMappingPage() {
           nodes: previewNodes,
           edges: previewEdges,
         })
+        setPositionOverrides({})
       }
     },
     onError: () => toast.error('Failed to open mapping.'),
@@ -281,7 +294,7 @@ export function GraphMappingPage() {
       const payload: GraphMappingPayload = {
         name: mappingName.trim(),
         description: mappingDescription.trim() || undefined,
-        nodes: toPersistedNodes(previewGraph.nodes),
+        nodes: toPersistedNodes(positionedPreviewNodes),
         edges: toPersistedEdges(previewGraph.edges),
       }
       // eslint-disable-next-line no-console
@@ -317,6 +330,7 @@ export function GraphMappingPage() {
         setBuilder(EMPTY_BUILDER)
         setLoadedGraph(null)
         setBuilderHydrated(true)
+        setPositionOverrides({})
       }
       await mappingsQuery.refetch()
     },
@@ -330,6 +344,7 @@ export function GraphMappingPage() {
     setBuilder(EMPTY_BUILDER)
     setLoadedGraph(null)
     setBuilderHydrated(true)
+    setPositionOverrides({})
     setFocusNameTick((current) => current + 1)
     toast.message('Draft started. Set mapping name, root, and related values.')
   }
@@ -393,7 +408,16 @@ export function GraphMappingPage() {
                 <CardTitle>Graph preview</CardTitle>
               </CardHeader>
               <CardContent>
-                <GraphPreview nodes={previewGraph.nodes} edges={previewGraph.edges} />
+                <GraphPreview
+                  key={previewSignature}
+                  nodes={positionedPreviewNodes}
+                  edges={previewGraph.edges}
+                  onNodesUpdate={(nextNodes) =>
+                    setPositionOverrides(
+                      Object.fromEntries(nextNodes.map((node) => [node.id, node.position]))
+                    )
+                  }
+                />
               </CardContent>
             </Card>
           </div>

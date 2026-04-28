@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 export type Node<T = Record<string, unknown>> = {
   id: string
@@ -24,6 +24,11 @@ export type NodeChange = {
   position: { x: number; y: number }
 }
 
+export type EdgeChange = {
+  id: string
+  type: 'remove'
+}
+
 export function addEdge(connection: Connection, edges: Edge[]): Edge[] {
   return [
     ...edges,
@@ -45,21 +50,57 @@ export function applyNodeChanges<T>(changes: NodeChange[], nodes: Node<T>[]): No
   })
 }
 
+export function applyEdgeChanges(changes: EdgeChange[], edges: Edge[]): Edge[] {
+  if (changes.length === 0) return edges
+  const removedIds = new Set(changes.filter((change) => change.type === 'remove').map((change) => change.id))
+  return edges.filter((edge) => !removedIds.has(edge.id))
+}
+
+export function useNodesState<T>(initialNodes: Node<T>[]): [
+  Node<T>[],
+  React.Dispatch<React.SetStateAction<Node<T>[]>>,
+  (changes: NodeChange[]) => void,
+] {
+  const [nodes, setNodes] = useState<Node<T>[]>(initialNodes)
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((current) => applyNodeChanges(changes, current))
+  }, [])
+
+  return [nodes, setNodes, onNodesChange]
+}
+
+export function useEdgesState(initialEdges: Edge[]): [
+  Edge[],
+  React.Dispatch<React.SetStateAction<Edge[]>>,
+  (changes: EdgeChange[]) => void,
+] {
+  const [edges, setEdges] = useState<Edge[]>(initialEdges)
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((current) => applyEdgeChanges(changes, current))
+  }, [])
+
+  return [edges, setEdges, onEdgesChange]
+}
+
 type ReactFlowProps = {
   nodes: Node[]
   edges: Edge[]
   onNodesChange?: (changes: NodeChange[]) => void
+  onEdgesChange?: (changes: EdgeChange[]) => void
   onConnect?: (connection: Connection) => void
   children?: React.ReactNode
+  fitView?: boolean
 }
 
 export default function ReactFlow({
   nodes,
   edges,
   onNodesChange,
+  onEdgesChange,
   onConnect,
   children,
 }: ReactFlowProps) {
+  void onEdgesChange
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null)
   const [pendingSource, setPendingSource] = useState<string | null>(null)
@@ -146,7 +187,7 @@ export default function ReactFlow({
       {nodes.map((node) => (
         <div
           key={node.id}
-          className='absolute min-w-[180px] cursor-move rounded-md border bg-card p-3 text-xs shadow-sm'
+          className='absolute min-w-[180px] max-w-[260px] cursor-move whitespace-pre-wrap break-words rounded-md border bg-card p-3 text-xs leading-4 shadow-sm'
           style={{ left: node.position.x, top: node.position.y }}
           onMouseDown={(event) => startDrag(event, node)}
         >

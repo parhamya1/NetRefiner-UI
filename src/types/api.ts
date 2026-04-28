@@ -19,6 +19,26 @@ export interface ApiUser {
   updated_at: string
 }
 
+
+
+export type User = ApiUser
+
+export interface UserCreatePayload {
+  email: string
+  full_name: string
+  password: string
+  role: UserRole
+  is_active: boolean
+  page_permissions?: PagePermission[]
+}
+
+export interface UserUpdatePayload {
+  email: string
+  full_name: string
+  role: UserRole
+  is_active: boolean
+}
+
 export interface LoginInput {
   email: string
   password: string
@@ -31,6 +51,43 @@ export interface LoginResponse {
   user: ApiUser
 }
 
+
+
+export interface AssignedEntity {
+  entity_id: string
+  display_title: string
+  display_type: 'table' | string
+  filters_enabled: boolean
+  sort_order: number
+}
+
+export interface Page {
+  id: string
+  title: string
+  slug: string
+  parent_id: string | null
+  menu_order: number
+  is_menu_visible: boolean
+  assigned_entities: AssignedEntity[]
+}
+
+export interface PageCreatePayload {
+  title: string
+  slug: string
+  parent_id: string | null
+  menu_order: number
+  is_menu_visible: boolean
+  assigned_entities: AssignedEntity[]
+}
+
+export type PageUpdatePayload = PageCreatePayload
+
+export interface EntitySummary {
+  id: string
+  name: string
+  table_name?: string
+  [key: string]: unknown
+}
 export interface MenuTreeNode {
   id: string
   title: string
@@ -42,12 +99,7 @@ export interface MenuTreeNode {
   children: MenuTreeNode[]
 }
 
-export interface EntityReference {
-  id: string
-  name: string
-  table_name?: string
-  [key: string]: unknown
-}
+export type EntityReference = EntitySummary
 
 export interface PageSectionColumn {
   name: string

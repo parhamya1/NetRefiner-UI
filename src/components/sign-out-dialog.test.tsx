@@ -35,6 +35,7 @@ describe('SignOutDialog', () => {
     expect(reset).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith({
       to: '/sign-in',
+      search: {},
       replace: true,
     })
   })

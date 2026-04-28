@@ -19,14 +19,14 @@ export function MappingList({
   onDelete,
 }: MappingListProps) {
   return (
-    <Card>
+    <Card className='max-h-[460px] overflow-hidden'>
       <CardHeader className='flex flex-row items-center justify-between'>
         <CardTitle>Mappings</CardTitle>
         <Button size='sm' onClick={onCreate}>
           Create Mapping
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className='h-full overflow-y-auto'>
         <Table>
           <TableHeader>
             <TableRow>

@@ -15,6 +15,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedUserManagementRouteImport } from './routes/_authenticated/user-management'
 import { Route as AuthenticatedPermissionManagementRouteImport } from './routes/_authenticated/permission-management'
 import { Route as AuthenticatedPageManagementRouteImport } from './routes/_authenticated/page-management'
+import { Route as AuthenticatedGraphMappingRouteImport } from './routes/_authenticated/graph-mapping'
 import { Route as AuthenticatedEntityManagementRouteImport } from './routes/_authenticated/entity-management'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
@@ -75,6 +76,12 @@ const AuthenticatedPageManagementRoute =
   AuthenticatedPageManagementRouteImport.update({
     id: '/page-management',
     path: '/page-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedGraphMappingRoute =
+  AuthenticatedGraphMappingRouteImport.update({
+    id: '/graph-mapping',
+    path: '/graph-mapping',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedEntityManagementRoute =
@@ -246,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/entity-management': typeof AuthenticatedEntityManagementRoute
+  '/graph-mapping': typeof AuthenticatedGraphMappingRoute
   '/page-management': typeof AuthenticatedPageManagementRoute
   '/permission-management': typeof AuthenticatedPermissionManagementRoute
   '/user-management': typeof AuthenticatedUserManagementRoute
@@ -278,6 +286,7 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/entity-management': typeof AuthenticatedEntityManagementRoute
+  '/graph-mapping': typeof AuthenticatedGraphMappingRoute
   '/page-management': typeof AuthenticatedPageManagementRoute
   '/permission-management': typeof AuthenticatedPermissionManagementRoute
   '/user-management': typeof AuthenticatedUserManagementRoute
@@ -316,6 +325,7 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/entity-management': typeof AuthenticatedEntityManagementRoute
+  '/_authenticated/graph-mapping': typeof AuthenticatedGraphMappingRoute
   '/_authenticated/page-management': typeof AuthenticatedPageManagementRoute
   '/_authenticated/permission-management': typeof AuthenticatedPermissionManagementRoute
   '/_authenticated/user-management': typeof AuthenticatedUserManagementRoute
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/entity-management'
+    | '/graph-mapping'
     | '/page-management'
     | '/permission-management'
     | '/user-management'
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/entity-management'
+    | '/graph-mapping'
     | '/page-management'
     | '/permission-management'
     | '/user-management'
@@ -422,6 +434,7 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/entity-management'
+    | '/_authenticated/graph-mapping'
     | '/_authenticated/page-management'
     | '/_authenticated/permission-management'
     | '/_authenticated/user-management'
@@ -500,6 +513,13 @@ declare module '@tanstack/react-router' {
       path: '/page-management'
       fullPath: '/page-management'
       preLoaderRoute: typeof AuthenticatedPageManagementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/graph-mapping': {
+      id: '/_authenticated/graph-mapping'
+      path: '/graph-mapping'
+      fullPath: '/graph-mapping'
+      preLoaderRoute: typeof AuthenticatedGraphMappingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/entity-management': {
@@ -734,6 +754,7 @@ const AuthenticatedSettingsRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedEntityManagementRoute: typeof AuthenticatedEntityManagementRoute
+  AuthenticatedGraphMappingRoute: typeof AuthenticatedGraphMappingRoute
   AuthenticatedPageManagementRoute: typeof AuthenticatedPageManagementRoute
   AuthenticatedPermissionManagementRoute: typeof AuthenticatedPermissionManagementRoute
   AuthenticatedUserManagementRoute: typeof AuthenticatedUserManagementRoute
@@ -750,6 +771,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedEntityManagementRoute: AuthenticatedEntityManagementRoute,
+  AuthenticatedGraphMappingRoute: AuthenticatedGraphMappingRoute,
   AuthenticatedPageManagementRoute: AuthenticatedPageManagementRoute,
   AuthenticatedPermissionManagementRoute:
     AuthenticatedPermissionManagementRoute,

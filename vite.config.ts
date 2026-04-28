@@ -19,6 +19,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@xyflow/react': path.resolve(__dirname, './src/shims/xyflow-react.tsx'),
     },
   },
   test: {

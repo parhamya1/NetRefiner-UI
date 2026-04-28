@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { FileText, FolderKanban, Settings, ShieldCheck, Users } from 'lucide-react'
+import { FileText, FolderKanban, Network, Settings, ShieldCheck, Users } from 'lucide-react'
 import { getMenuTree, getPages } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { getUserPagePermissions } from '@/lib/api/users'
@@ -189,6 +189,11 @@ function buildManagementNavGroup(role: UserRole | undefined): NavGroupType | nul
         title: 'Entity Management',
         url: '/entity-management',
         icon: FolderKanban,
+      },
+      {
+        title: 'Graph Mapping',
+        url: '/graph-mapping',
+        icon: Network,
       },
       {
         title: 'User Management',

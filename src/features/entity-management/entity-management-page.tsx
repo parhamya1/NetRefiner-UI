@@ -383,7 +383,6 @@ export function EntityManagementPage() {
       const normalizedColumns = csvColumns.map((column) => {
         const frontendType = String(column.frontend_type)
         return {
-          ...column,
           name: column.name.trim(),
           label: column.label.trim(),
           type: frontendType,
@@ -413,15 +412,21 @@ export function EntityManagementPage() {
         (csvPreview?.data as { file_id?: string } | undefined)?.file_id ??
         (csvPreview?.id as string | undefined) ??
         getPreviewUploadId(csvPreview ?? ({} as CsvPreviewResponse))
+      if (!resolvedFileId) {
+        throw new Error('CSV file identifier is missing from preview response.')
+      }
 
       const dirtyPayload = {
-        name: csvName.trim(),
+        file_id: resolvedFileId,
+        entity_name: csvName.trim(),
         table_name: csvTableName.trim(),
         columns: normalizedColumns,
       }
-      const confirmPayload: CsvConfirmPayload = { ...dirtyPayload }
-      if (resolvedFileId) {
-        confirmPayload.file_id = resolvedFileId
+      const confirmPayload: CsvConfirmPayload = {
+        file_id: dirtyPayload.file_id,
+        entity_name: dirtyPayload.entity_name,
+        table_name: dirtyPayload.table_name,
+        columns: dirtyPayload.columns,
       }
 
       // eslint-disable-next-line no-console

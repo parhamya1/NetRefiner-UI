@@ -150,8 +150,8 @@ export interface CsvConfirmPayload {
   import_id?: string
   upload_id?: string
   file_id?: string
-  name: string
-  entity_name?: string
+  name?: string
+  entity_name: string
   table_name?: string
   columns?: EntityColumn[]
   [key: string]: unknown

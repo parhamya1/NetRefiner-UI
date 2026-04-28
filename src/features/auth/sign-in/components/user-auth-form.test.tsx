@@ -130,4 +130,24 @@ describe('UserAuthForm', () => {
       })
     )
   })
+
+  it('falls back to / when redirectTo is not a safe local path', async () => {
+    vi.clearAllMocks()
+
+    const { getByRole, getByLabelText } = await render(
+      <UserAuthForm redirectTo='https://evil.test' />
+    )
+
+    await userEvent.fill(getByRole('textbox', { name: /Email/i }), 'a@b.com')
+    await userEvent.fill(getByLabelText('Password'), '1234567')
+    await userEvent.click(getByRole('button', { name: /Sign in/i }))
+
+    await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/',
+        replace: true,
+      })
+    )
+  })
 })

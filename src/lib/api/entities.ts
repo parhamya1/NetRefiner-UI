@@ -1,13 +1,20 @@
 import { apiClient } from './client'
 import type {
+  Entity,
+  EntityCreatePayload,
   EntityQueryPayload,
   EntityReference,
   EntityRowsParams,
   EntityRowsResponse,
 } from '@/types/api'
 
-export async function getEntities(): Promise<EntityReference[]> {
-  const { data } = await apiClient.get<EntityReference[]>('/entities')
+export async function getEntities(): Promise<Entity[]> {
+  const { data } = await apiClient.get<Entity[]>('/entities')
+  return data
+}
+
+export async function createEntity(payload: EntityCreatePayload): Promise<Entity> {
+  const { data } = await apiClient.post<Entity>('/entities', payload)
   return data
 }
 

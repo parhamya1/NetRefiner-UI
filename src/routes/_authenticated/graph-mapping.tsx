@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { EntityManagementPage } from '@/features/entity-management'
+import { GraphMappingPage } from '@/features/graph-mapping'
 import { ensureCurrentUser } from '@/lib/auth/ensure-current-user'
 
-export const Route = createFileRoute('/_authenticated/entity-management')({
+export const Route = createFileRoute('/_authenticated/graph-mapping')({
   beforeLoad: async ({ location }) => {
     const user = await ensureCurrentUser()
 
@@ -22,5 +22,5 @@ export const Route = createFileRoute('/_authenticated/entity-management')({
       params: { error: 'forbidden' },
     })
   },
-  component: EntityManagementPage,
+  component: GraphMappingPage,
 })

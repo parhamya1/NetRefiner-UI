@@ -149,6 +149,23 @@ function inferFrontendType(
   return 'text'
 }
 
+function normalizeFrontendType(value: unknown): 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  if (
+    normalized === 'text' ||
+    normalized === 'number' ||
+    normalized === 'integer' ||
+    normalized === 'boolean' ||
+    normalized === 'date' ||
+    normalized === 'datetime'
+  ) {
+    return normalized
+  }
+  return 'text'
+}
+
 function createBlankColumn(): EntityColumn {
   return {
     name: '',
@@ -300,13 +317,26 @@ export function EntityManagementPage() {
       const nextColumns =
         columnsFromResponse.length > 0
           ? columnsFromResponse.map((column, index) => {
-              const header = cleanCsvHeader(column.label || column.name)
-              const inferredType =
-                inferFrontendType(column.name || header, sampleRows) ?? 'text'
-              const frontendType = String(column.frontend_type ?? column.type ?? inferredType)
+              const originalName = String(
+                (column.original_name as string | undefined) ??
+                  column.label ??
+                  column.name ??
+                  ''
+              )
+              const suggestedName = String(
+                (column.suggested_name as string | undefined) ?? column.name ?? ''
+              )
+              const header = cleanCsvHeader(originalName)
+              const inferredType = inferFrontendType(originalName || header, sampleRows)
+              const frontendType = normalizeFrontendType(
+                (column.suggested_type as string | undefined) ??
+                  column.frontend_type ??
+                  column.type ??
+                  inferredType
+              )
               return {
                 ...column,
-                name: toColumnName(column.name || header) || `column_${index + 1}`,
+                name: toColumnName(suggestedName || header) || `column_${index + 1}`,
                 label: header,
                 type: frontendType,
                 frontend_type: frontendType,

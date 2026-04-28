@@ -16,7 +16,17 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import type { GraphMappingEdge, GraphMappingNode, GraphMappingPayload } from '@/types/api'
 import { GraphPreview } from './components/graph-preview'
 import { MappingList } from './components/mapping-list'
@@ -187,6 +197,7 @@ export function GraphMappingPage() {
   const [builderHydrated, setBuilderHydrated] = useState(true)
   const [focusNameTick, setFocusNameTick] = useState(0)
   const [positionOverrides, setPositionOverrides] = useState<Record<string, { x: number; y: number }>>({})
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
 
   const mappingsQuery = useQuery({
     queryKey: ['graph-mappings', 'list'],
@@ -272,6 +283,90 @@ export function GraphMappingPage() {
       label: edge.label ?? '',
       edge_type: 'manual',
     }))
+  }
+
+  const trainingExportJson = useMemo(() => {
+    const exportNodes = positionedPreviewNodes.map((node) => ({
+      id: node.id,
+      entity_id: node.data.entity_id,
+      column: node.data.column,
+      value: node.data.value,
+      label: node.data.label,
+      node_type: 'entity_value' as const,
+    }))
+
+    const exportEdges = previewGraph.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label ?? null,
+      edge_type: 'manual' as const,
+    }))
+
+    const nodesById = new Map(exportNodes.map((node) => [node.id, node]))
+    const trainingPairs = exportEdges
+      .map((edge) => {
+        const sourceNode = nodesById.get(edge.source)
+        const targetNode = nodesById.get(edge.target)
+        if (!sourceNode || !targetNode) return null
+
+        return {
+          source: {
+            entity_id: sourceNode.entity_id,
+            column: sourceNode.column,
+            value: sourceNode.value,
+            label: sourceNode.label,
+          },
+          target: {
+            entity_id: targetNode.entity_id,
+            column: targetNode.column,
+            value: targetNode.value,
+            label: targetNode.label,
+          },
+          relationship: 'manual' as const,
+        }
+      })
+      .filter((pair): pair is NonNullable<typeof pair> => pair !== null)
+
+    return {
+      mapping_name: mappingName,
+      description: mappingDescription,
+      nodes: exportNodes,
+      edges: exportEdges,
+      training_pairs: trainingPairs,
+    }
+  }, [mappingDescription, mappingName, positionedPreviewNodes, previewGraph.edges])
+
+  const trainingExportText = useMemo(
+    () => JSON.stringify(trainingExportJson, null, 2),
+    [trainingExportJson]
+  )
+
+  async function copyTrainingJson() {
+    try {
+      await navigator.clipboard.writeText(trainingExportText)
+      toast.success('Training JSON copied to clipboard.')
+    } catch {
+      toast.error('Failed to copy training JSON.')
+    }
+  }
+
+  function downloadTrainingJson() {
+    const safeName =
+      (mappingName.trim() || 'graph-mapping')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'graph-mapping'
+
+    const blob = new Blob([trainingExportText], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${safeName}-training.json`
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
   }
 
   const openMutation = useMutation({
@@ -439,6 +534,37 @@ export function GraphMappingPage() {
                 )
               }
             />
+
+            <div className='mt-4 flex justify-end'>
+              <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button disabled={positionedPreviewNodes.length === 0}>Export Training JSON</Button>
+                </DialogTrigger>
+                <DialogContent className='max-h-[80vh] max-w-4xl overflow-hidden'>
+                  <DialogHeader>
+                    <DialogTitle>Training JSON</DialogTitle>
+                    <DialogDescription>
+                      Read-only export generated from the current graph mapping state.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className='overflow-auto rounded-md border bg-muted/30 p-3'>
+                    <pre className='max-h-[52vh] whitespace-pre-wrap break-all text-xs'>
+                      {trainingExportText}
+                    </pre>
+                  </div>
+
+                  <DialogFooter>
+                    <Button type='button' variant='outline' onClick={downloadTrainingJson}>
+                      Download JSON
+                    </Button>
+                    <Button type='button' onClick={copyTrainingJson}>
+                      Copy JSON
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </CardContent>
         </Card>
       </Main>

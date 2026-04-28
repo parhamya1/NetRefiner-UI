@@ -89,6 +89,9 @@ export interface EntitySummary {
   [key: string]: unknown
 }
 export interface EntityColumn {
+  original_name?: string
+  suggested_name?: string
+  suggested_type?: string
   name: string
   label: string
   type?: string

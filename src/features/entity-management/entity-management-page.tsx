@@ -337,6 +337,7 @@ export function EntityManagementPage() {
               )
               return {
                 ...column,
+                original_name: originalName,
                 name: toColumnName(suggestedName || header) || `column_${index + 1}`,
                 label: header,
                 type: frontendType,
@@ -349,6 +350,7 @@ export function EntityManagementPage() {
               const header = cleanCsvHeader(rawHeader)
               const frontendType = inferFrontendType(rawHeader, sampleRows)
               return {
+                original_name: rawHeader,
                 name: toColumnName(header) || `column_${index + 1}`,
                 label: header,
                 type: frontendType,
@@ -383,6 +385,7 @@ export function EntityManagementPage() {
       const normalizedColumns = csvColumns.map((column) => {
         const frontendType = String(column.frontend_type)
         return {
+          original_name: String(column.original_name ?? column.label ?? column.name),
           name: column.name.trim(),
           label: column.label.trim(),
           type: frontendType,

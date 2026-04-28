@@ -21,12 +21,27 @@ import { TeamSwitcher } from './team-switcher'
 import { type MenuTreeNode, type Page, type PagePermission, type UserRole } from '@/types/api'
 import { type NavGroup as NavGroupType, type NavItem, type SidebarData } from './types'
 
+function getPageId(page: Page): string {
+  const withOptionalLegacy = page as Page & { _id?: string }
+  return withOptionalLegacy.id ?? withOptionalLegacy._id ?? ''
+}
+
+function getParentId(page: Page): string | null {
+  const withOptionalLegacy = page as Page & { parentId?: string | null }
+  return withOptionalLegacy.parent_id ?? withOptionalLegacy.parentId ?? null
+}
+
+function getPermissionPageId(permission: PagePermission): string {
+  const withOptionalLegacy = permission as PagePermission & { pageId?: string }
+  return withOptionalLegacy.page_id ?? withOptionalLegacy.pageId ?? ''
+}
+
 function toMenuTreeNode(page: Page, children: MenuTreeNode[]): MenuTreeNode {
   return {
-    id: page.id,
+    id: getPageId(page),
     title: page.title,
     slug: page.slug,
-    parent_id: page.parent_id,
+    parent_id: getParentId(page),
     menu_order: page.menu_order,
     is_menu_visible: page.is_menu_visible,
     assigned_entities: page.assigned_entities.map((entity) => ({
@@ -39,14 +54,14 @@ function toMenuTreeNode(page: Page, children: MenuTreeNode[]): MenuTreeNode {
 
 function buildMenuTreeFromPages(pages: Page[], includeIds?: Set<string>): MenuTreeNode[] {
   const filteredPages = pages.filter(
-    (page) => page.is_menu_visible && (!includeIds || includeIds.has(page.id))
+    (page) => page.is_menu_visible && (!includeIds || includeIds.has(getPageId(page)))
   )
   const pagesByParent = new Map<string | null, Page[]>()
 
   for (const page of filteredPages) {
-    const siblings = pagesByParent.get(page.parent_id) ?? []
+    const siblings = pagesByParent.get(getParentId(page)) ?? []
     siblings.push(page)
-    pagesByParent.set(page.parent_id, siblings)
+    pagesByParent.set(getParentId(page), siblings)
   }
 
   const buildNodes = (parentId: string | null): MenuTreeNode[] => {
@@ -54,31 +69,48 @@ function buildMenuTreeFromPages(pages: Page[], includeIds?: Set<string>): MenuTr
       (a, b) => a.menu_order - b.menu_order
     )
 
-    return siblings.map((page) => toMenuTreeNode(page, buildNodes(page.id)))
+    return siblings.map((page) => toMenuTreeNode(page, buildNodes(getPageId(page))))
   }
 
   return buildNodes(null)
 }
 
 function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]): Set<string> {
-  const pagesById = new Map(pages.map((page) => [page.id, page]))
+  const pagesById = new Map(pages.map((page) => [getPageId(page), page]))
   const allowedIds = new Set(
     permissions
-      .filter((permission) => permission.can_view && pagesById.has(permission.page_id))
-      .map((permission) => permission.page_id)
+      .map((permission) => ({
+        canView: permission.can_view,
+        pageId: getPermissionPageId(permission),
+      }))
+      .filter((permission) => permission.canView && pagesById.has(permission.pageId))
+      .map((permission) => permission.pageId)
   )
 
   const includeIds = new Set<string>(allowedIds)
 
   for (const pageId of allowedIds) {
     const visited = new Set<string>([pageId])
-    let parentId = pagesById.get(pageId)?.parent_id ?? null
+    let parentId = pagesById.get(pageId) ? getParentId(pagesById.get(pageId)!) : null
 
     while (parentId && !visited.has(parentId)) {
       visited.add(parentId)
       includeIds.add(parentId)
-      parentId = pagesById.get(parentId)?.parent_id ?? null
+      parentId = pagesById.get(parentId) ? getParentId(pagesById.get(parentId)!) : null
     }
+  }
+
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.info('Normal-user sidebar hierarchy debug', {
+      allPages: pages.map((page) => ({
+        id: getPageId(page),
+        title: page.title,
+        parentId: getParentId(page),
+      })),
+      allowedIds: Array.from(allowedIds),
+      includeIds: Array.from(includeIds),
+    })
   }
 
   return includeIds
@@ -221,17 +253,25 @@ export function AppSidebar() {
   )
 
   const resolvedMenuTree = useMemo(() => {
+    let resolved = menuTree
+
     if (isAdminRole) {
-      return buildMenuTreeFromPages(pages ?? [])
-    }
-
-    if (isNormalUser && pages) {
+      resolved = buildMenuTreeFromPages(pages ?? [])
+    } else if (isNormalUser && pages) {
       const includeIds = getIncludePageIdsForUser(pages, selfPagePermissions ?? [])
-      return buildMenuTreeFromPages(pages, includeIds)
+      resolved = buildMenuTreeFromPages(pages, includeIds)
     }
 
-    return menuTree
-  }, [isAdminRole, isNormalUser, menuTree, pages, selfPagePermissions])
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info('Sidebar resolved tree', {
+        role: auth.user?.role,
+        titles: (resolved ?? []).map((node) => node.title),
+      })
+    }
+
+    return resolved
+  }, [auth.user?.role, isAdminRole, isNormalUser, menuTree, pages, selfPagePermissions])
 
   const resolvedSidebarData = useMemo(
     () => buildSidebarData(resolvedMenuTree, navUser, auth.user?.role),

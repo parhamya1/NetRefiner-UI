@@ -11,7 +11,11 @@ import {
   getClickHouseTables,
 } from '@/lib/api/data-sources'
 import { createEntity, getEntities } from '@/lib/api/entities'
-import { confirmCsvImport, previewCsvImport, registerClickHouseTable } from '@/lib/api/imports'
+import {
+  confirmCsvImport,
+  previewCsvImportWithMetadata,
+  registerClickHouseTable,
+} from '@/lib/api/imports'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
@@ -81,6 +85,7 @@ export function EntityManagementPage() {
   const [csvPreview, setCsvPreview] = useState<CsvPreviewResponse | null>(null)
   const [csvName, setCsvName] = useState('')
   const [csvTableName, setCsvTableName] = useState('')
+  const [csvColumns, setCsvColumns] = useState<EntityColumn[]>([])
 
   const [showConnectionForm, setShowConnectionForm] = useState(false)
   const [connectionForm, setConnectionForm] = useState<ClickHouseDataSourceCreatePayload>({
@@ -192,23 +197,35 @@ export function EntityManagementPage() {
   const csvPreviewMutation = useMutation({
     mutationFn: async () => {
       if (!csvFile) throw new Error('Select a CSV file.')
-      return previewCsvImport(csvFile)
+      return previewCsvImportWithMetadata({
+        file: csvFile,
+        name: csvName.trim(),
+        entity_name: csvName.trim(),
+        table_name: csvTableName.trim(),
+      })
     },
     onSuccess: (data) => {
       setCsvPreview(data)
-      setCsvName(data.name ?? csvName)
-      setCsvTableName(data.table_name ?? csvTableName)
+      setCsvColumns(data.columns ?? [])
     },
-    onError: () => toast.error('CSV preview failed.'),
+    onError: (error) => {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      const detail =
+        axiosError.response?.data?.detail ?? axiosError.response?.data ?? 'CSV preview failed.'
+      toast.error(JSON.stringify(detail, null, 2))
+    },
   })
 
   const csvConfirmMutation = useMutation({
     mutationFn: () =>
       confirmCsvImport({
         import_id: csvPreview?.import_id,
+        upload_id: csvPreview?.upload_id,
+        file_id: csvPreview?.file_id,
         name: csvName,
+        entity_name: csvName,
         table_name: csvTableName || undefined,
-        columns: csvPreview?.columns,
+        columns: csvColumns,
       }),
     onSuccess: async () => {
       toast.success('CSV import confirmed.')
@@ -253,6 +270,7 @@ export function EntityManagementPage() {
     setManualColumns([createBlankColumn()])
     setCsvFile(null)
     setCsvPreview(null)
+    setCsvColumns([])
     setCsvName('')
     setCsvTableName('')
     setSelectedDataSourceId('')
@@ -460,49 +478,127 @@ export function EntityManagementPage() {
 
             {scenario === 'csv' ? (
               <div className='space-y-4'>
+                <div className='grid gap-3 md:grid-cols-2'>
+                  <Input
+                    placeholder='Entity name'
+                    value={csvName}
+                    onChange={(e) => setCsvName(e.target.value)}
+                  />
+                  <Input
+                    placeholder='table_name'
+                    value={csvTableName}
+                    onChange={(e) => setCsvTableName(e.target.value)}
+                  />
+                </div>
                 <Input
                   type='file'
                   accept='.csv,text/csv'
                   onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
                 />
-                <Button onClick={() => csvPreviewMutation.mutate()} disabled={!csvFile || csvPreviewMutation.isPending}>
+                <Button
+                  onClick={() => csvPreviewMutation.mutate()}
+                  disabled={
+                    !csvFile ||
+                    csvPreviewMutation.isPending ||
+                    csvName.trim().length === 0 ||
+                    csvTableName.trim().length === 0
+                  }
+                >
                   {csvPreviewMutation.isPending ? 'Previewing...' : 'Preview CSV'}
                 </Button>
 
                 {csvPreview ? (
                   <div className='space-y-3'>
-                    <div className='grid gap-3 md:grid-cols-2'>
-                      <Input placeholder='Entity name' value={csvName} onChange={(e) => setCsvName(e.target.value)} />
-                      <Input
-                        placeholder='table_name'
-                        value={csvTableName}
-                        onChange={(e) => setCsvTableName(e.target.value)}
-                      />
-                    </div>
-
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Name</TableHead>
                           <TableHead>Label</TableHead>
+                          <TableHead>Frontend Type</TableHead>
                           <TableHead>Type</TableHead>
+                          <TableHead>Filterable</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {csvPreview.columns.map((column) => (
+                        {csvColumns.map((column, index) => (
                           <TableRow key={column.name}>
                             <TableCell>{column.name}</TableCell>
-                            <TableCell>{column.label}</TableCell>
-                            <TableCell>{column.clickhouse_type}</TableCell>
+                            <TableCell>
+                              <Input
+                                value={column.label}
+                                onChange={(e) =>
+                                  setCsvColumns((current) =>
+                                    current.map((item, idx) =>
+                                      idx === index ? { ...item, label: e.target.value } : item
+                                    )
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={String(column.frontend_type)}
+                                onValueChange={(value) =>
+                                  setCsvColumns((current) =>
+                                    current.map((item, idx) =>
+                                      idx === index
+                                        ? {
+                                            ...item,
+                                            type: value,
+                                            frontend_type: value,
+                                            clickhouse_type:
+                                              FRONTEND_TO_CLICKHOUSE[value] ?? item.clickhouse_type,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Object.keys(FRONTEND_TO_CLICKHOUSE).map((value) => (
+                                    <SelectItem key={value} value={value}>
+                                      {value}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>{column.clickhouse_type ?? column.type ?? '-'}</TableCell>
+                            <TableCell>
+                              <Checkbox
+                                checked={column.is_filterable}
+                                onCheckedChange={(checked) =>
+                                  setCsvColumns((current) =>
+                                    current.map((item, idx) =>
+                                      idx === index
+                                        ? { ...item, is_filterable: checked === true }
+                                        : item
+                                    )
+                                  )
+                                }
+                              />
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
 
+                    {(csvPreview.sample_rows ?? csvPreview.rows)?.length ? (
+                      <div className='rounded-md border p-3'>
+                        <p className='mb-2 text-sm font-medium'>Sample Rows</p>
+                        <pre className='overflow-auto text-xs'>
+                          {JSON.stringify(csvPreview.sample_rows ?? csvPreview.rows, null, 2)}
+                        </pre>
+                      </div>
+                    ) : null}
+
                     <div className='flex justify-end'>
                       <Button
                         onClick={() => csvConfirmMutation.mutate()}
-                        disabled={csvConfirmMutation.isPending || csvName.length === 0}
+                        disabled={csvConfirmMutation.isPending || csvName.trim().length === 0}
                       >
                         {csvConfirmMutation.isPending ? 'Confirming...' : 'Confirm Import'}
                       </Button>

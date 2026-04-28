@@ -135,15 +135,23 @@ export interface PageSectionColumn {
 
 export interface CsvPreviewResponse {
   import_id?: string
+  upload_id?: string
+  file_id?: string
   name?: string
+  entity_name?: string
   table_name?: string
   columns: EntityColumn[]
+  sample_rows?: Record<string, unknown>[]
+  rows?: Record<string, unknown>[]
   [key: string]: unknown
 }
 
 export interface CsvConfirmPayload {
   import_id?: string
+  upload_id?: string
+  file_id?: string
   name: string
+  entity_name?: string
   table_name?: string
   columns?: EntityColumn[]
   [key: string]: unknown

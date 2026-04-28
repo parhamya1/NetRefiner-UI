@@ -61,19 +61,21 @@ function buildMenuTreeFromPages(pages: Page[], includeIds?: Set<string>): MenuTr
 }
 
 function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]): Set<string> {
+  const pagesById = new Map(pages.map((page) => [page.id, page]))
   const allowedIds = new Set(
-    permissions.filter((permission) => permission.can_view).map((permission) => permission.page_id)
+    permissions
+      .filter((permission) => permission.can_view && pagesById.has(permission.page_id))
+      .map((permission) => permission.page_id)
   )
 
-  if (allowedIds.size === 0) return allowedIds
-
-  const pagesById = new Map(pages.map((page) => [page.id, page]))
   const includeIds = new Set<string>(allowedIds)
 
   for (const pageId of allowedIds) {
+    const visited = new Set<string>([pageId])
     let parentId = pagesById.get(pageId)?.parent_id ?? null
 
-    while (parentId) {
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId)
       includeIds.add(parentId)
       parentId = pagesById.get(parentId)?.parent_id ?? null
     }

@@ -223,6 +223,7 @@ export interface PageConfig {
   slug: string
   parent_id: string | null
   sections: PageSectionConfig[]
+  assigned_entities?: AssignedEntity[]
 }
 
 export type FilterOperator =

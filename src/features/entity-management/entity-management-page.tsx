@@ -17,7 +17,7 @@ import {
   previewCsvImportWithMetadata,
   registerClickHouseTable,
 } from '@/lib/api/imports'
-import { getPages, updatePage } from '@/lib/api/pages'
+import { getPage, getPageBySlug, getPages, updatePage } from '@/lib/api/pages'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -641,14 +641,26 @@ export function EntityManagementPage() {
         },
       ]
 
-      await updatePage(targetPage.id, {
+      const payload = {
         title: targetPage.title,
         slug: targetPage.slug,
         parent_id: targetPage.parent_id,
         menu_order: targetPage.menu_order,
         is_menu_visible: targetPage.is_menu_visible,
         assigned_entities: updatedAssignedEntities,
-      })
+      }
+
+      // eslint-disable-next-line no-console
+      console.log('UPDATE PAGE PAYLOAD', payload)
+      await updatePage(targetPage.id, payload)
+
+      const pageByIdResponse = await getPage(targetPage.id)
+      // eslint-disable-next-line no-console
+      console.log('PAGE BY ID RESPONSE', pageByIdResponse)
+
+      const pageBySlugResponse = await getPageBySlug(targetPage.slug)
+      // eslint-disable-next-line no-console
+      console.log('PAGE BY SLUG RESPONSE', pageBySlugResponse)
 
       return {
         assignedPageSlug: targetPage.slug,
@@ -662,6 +674,7 @@ export function EntityManagementPage() {
       setAssignDisplayTitle('')
       setAssignFiltersEnabled(true)
       setAssignSortOrder(1)
+      await queryClient.invalidateQueries({ queryKey: ['pages'] })
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.management })
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages.menuTree })
       if (result?.assignedPageSlug) {
@@ -785,17 +798,6 @@ export function EntityManagementPage() {
                           <Button type='button' variant='outline' size='sm' onClick={() => openAssignDialog(entity)}>
                             Assign to Page
                           </Button>
-                          {entity.source_type === 'manual' ? (
-                            <Button
-                              type='button'
-                              variant='outline'
-                              size='sm'
-                              disabled
-                              title='Manual entity editing requires backend update endpoint'
-                            >
-                              Edit
-                            </Button>
-                          ) : null}
                           <Button
                             type='button'
                             variant='destructive'

@@ -1,31 +1,48 @@
 import { apiClient } from './client'
 import type {
-  ApiUser,
   PagePermission,
   UpdateMyPasswordInput,
-  UpdateUserPagePermissionsInput,
   UpdateUserPasswordInput,
-  UserCreateInput,
-  UserUpdateInput,
+  User,
+  UserCreatePayload,
+  UserUpdatePayload,
 } from '@/types/api'
 
-export async function listUsers(): Promise<ApiUser[]> {
-  const { data } = await apiClient.get<ApiUser[]>('/users')
+type PagePermissionsResponse =
+  | PagePermission[]
+  | {
+      page_permissions?: PagePermission[]
+    }
+
+function normalizePagePermissionsResponse(
+  response: PagePermissionsResponse
+): PagePermission[] {
+  if (Array.isArray(response)) return response
+
+  if (response && Array.isArray(response.page_permissions)) {
+    return response.page_permissions
+  }
+
+  return []
+}
+
+export async function getUsers(): Promise<User[]> {
+  const { data } = await apiClient.get<User[]>('/users')
   return data
 }
 
-export async function createUser(input: UserCreateInput): Promise<ApiUser> {
-  const { data } = await apiClient.post<ApiUser>('/users', input)
+export async function createUser(payload: UserCreatePayload): Promise<User> {
+  const { data } = await apiClient.post<User>('/users', payload)
   return data
 }
 
 export async function updateUser(
   userId: string,
-  input: UserUpdateInput
-): Promise<ApiUser> {
-  const { data } = await apiClient.put<ApiUser>(
+  payload: UserUpdatePayload
+): Promise<User> {
+  const { data } = await apiClient.put<User>(
     `/users/${encodeURIComponent(userId)}`,
-    input
+    payload
   )
   return data
 }
@@ -48,19 +65,22 @@ export async function updateMyPassword(input: UpdateMyPasswordInput): Promise<vo
 export async function getUserPagePermissions(
   userId: string
 ): Promise<PagePermission[]> {
-  const { data } = await apiClient.get<PagePermission[]>(
+  const { data } = await apiClient.get<PagePermissionsResponse>(
     `/users/${encodeURIComponent(userId)}/page-permissions`
   )
-  return data
+
+  return normalizePagePermissionsResponse(data)
 }
 
 export async function updateUserPagePermissions(
   userId: string,
-  input: UpdateUserPagePermissionsInput
+  permissions: PagePermission[]
 ): Promise<PagePermission[]> {
   const { data } = await apiClient.put<PagePermission[]>(
     `/users/${encodeURIComponent(userId)}/page-permissions`,
-    input
+    { page_permissions: permissions }
   )
   return data
 }
+
+export const listUsers = getUsers

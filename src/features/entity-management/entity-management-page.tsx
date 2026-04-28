@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/table'
 import type {
   ClickHouseDataSourceCreatePayload,
+  CsvConfirmPayload,
   CsvPreviewResponse,
   Entity,
   EntityColumn,
@@ -369,8 +370,14 @@ export function EntityManagementPage() {
 
   const csvConfirmMutation = useMutation({
     mutationFn: () => {
+      if (csvName.trim().length === 0) {
+        throw new Error('Entity name is required.')
+      }
+      if (csvTableName.trim().length === 0) {
+        throw new Error('Table name is required.')
+      }
       if (csvColumns.length === 0) {
-        throw new Error('Cannot confirm import: no columns detected.')
+        throw new Error('At least one column is required.')
       }
 
       const normalizedColumns = csvColumns.map((column) => {
@@ -401,18 +408,24 @@ export function EntityManagementPage() {
         nameSet.add(column.name)
       }
 
-      const confirmPayload = {
-        import_id: csvPreview?.import_id,
-        upload_id: csvPreview ? getPreviewUploadId(csvPreview) : undefined,
-        file_id: csvPreview?.file_id,
-        name: csvName,
-        entity_name: csvName,
-        table_name: csvTableName || undefined,
+      const resolvedFileId =
+        csvPreview?.file_id ??
+        (csvPreview?.data as { file_id?: string } | undefined)?.file_id ??
+        (csvPreview?.id as string | undefined) ??
+        getPreviewUploadId(csvPreview ?? ({} as CsvPreviewResponse))
+
+      const dirtyPayload = {
+        name: csvName.trim(),
+        table_name: csvTableName.trim(),
         columns: normalizedColumns,
+      }
+      const confirmPayload: CsvConfirmPayload = { ...dirtyPayload }
+      if (resolvedFileId) {
+        confirmPayload.file_id = resolvedFileId
       }
 
       // eslint-disable-next-line no-console
-      console.log('CSV CONFIRM PAYLOAD', confirmPayload)
+      console.log('CSV CONFIRM CLEAN PAYLOAD', confirmPayload)
       return confirmCsvImport(confirmPayload)
     },
     onSuccess: async () => {
@@ -424,7 +437,15 @@ export function EntityManagementPage() {
       const axiosError = error as AxiosError<{ detail?: unknown }>
       // eslint-disable-next-line no-console
       console.log('CSV CONFIRM ERROR', axiosError.response?.data)
+      // eslint-disable-next-line no-console
+      console.log('CSV CONFIRM ERROR MESSAGE', axiosError.message)
+      // eslint-disable-next-line no-console
+      console.log('CSV CONFIRM ERROR REQUEST STATUS', axiosError.request?.status)
       if (error instanceof Error) {
+        if (axiosError.response?.status === 500 || axiosError.request?.status === 500) {
+          toast.error('CSV confirm failed. Backend returned 500. Check backend logs.')
+          return
+        }
         toast.error(error.message)
         return
       }
@@ -716,6 +737,7 @@ export function EntityManagementPage() {
                             <TableHead>Frontend Type</TableHead>
                             <TableHead>ClickHouse Type</TableHead>
                             <TableHead>Filterable</TableHead>
+                            <TableHead>Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -794,6 +816,20 @@ export function EntityManagementPage() {
                                   }
                                 />
                               </TableCell>
+                              <TableCell>
+                                <Button
+                                  type='button'
+                                  variant='destructive'
+                                  size='sm'
+                                  onClick={() =>
+                                    setCsvColumns((current) =>
+                                      current.filter((_, idx) => idx !== index)
+                                    )
+                                  }
+                                >
+                                  Remove
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -813,7 +849,7 @@ export function EntityManagementPage() {
 
                     {csvColumns.length === 0 ? (
                       <div className='rounded-md border p-3 text-sm text-muted-foreground'>
-                        No columns detected from preview response.
+                        At least one column is required.
                       </div>
                     ) : null}
 
@@ -823,6 +859,7 @@ export function EntityManagementPage() {
                         disabled={
                           csvConfirmMutation.isPending ||
                           csvName.trim().length === 0 ||
+                          csvTableName.trim().length === 0 ||
                           csvColumns.length === 0
                         }
                       >

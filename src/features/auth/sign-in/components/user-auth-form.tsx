@@ -3,6 +3,7 @@ import { AxiosError } from 'axios'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Loader2, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
@@ -65,6 +66,7 @@ export function UserAuthForm({
 }: UserAuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { auth } = useAuthStore()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -80,6 +82,9 @@ export function UserAuthForm({
     form.clearErrors('root')
 
     try {
+      queryClient.removeQueries({ queryKey: ['pages'] })
+      queryClient.removeQueries({ queryKey: ['users', 'page-permissions'] })
+
       const authResponse = await login(data)
       auth.setAccessToken(authResponse.access_token)
       auth.setUser(authResponse.user)

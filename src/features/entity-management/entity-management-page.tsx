@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type { AxiosError } from 'axios'
 import { Plus, Trash2 } from 'lucide-react'
@@ -250,6 +250,28 @@ export function EntityManagementPage() {
       selectedDatabase.length > 0 &&
       selectedTable.length > 0,
   })
+
+  useEffect(() => {
+    const discoveryErrors = [
+      dataSourcesQuery.error,
+      databasesQuery.error,
+      tablesQuery.error,
+      schemaQuery.error,
+    ].filter(Boolean)
+
+    for (const error of discoveryErrors) {
+      const axiosError = error as AxiosError<{ detail?: unknown }>
+      if (axiosError.response?.data) {
+        // eslint-disable-next-line no-console
+        console.log('CLICKHOUSE DISCOVERY ERROR', axiosError.response.data)
+      }
+    }
+  }, [
+    dataSourcesQuery.error,
+    databasesQuery.error,
+    tablesQuery.error,
+    schemaQuery.error,
+  ])
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const normalizedManualColumns = useMemo(

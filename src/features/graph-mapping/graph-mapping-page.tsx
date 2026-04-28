@@ -473,13 +473,13 @@ export function GraphMappingPage() {
         <ProfileDropdown />
       </Header>
 
-      <Main fixed className='overflow-y-auto'>
-        <div>
+      <Main fixed className='space-y-6 overflow-y-auto bg-muted/20 p-4 md:p-6'>
+        <div className='space-y-1'>
           <h1 className='text-2xl font-bold tracking-tight'>Relationship Builder</h1>
           <p className='text-muted-foreground'>Guided flow: root → related values → child values.</p>
         </div>
 
-        <div className='grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]'>
+        <div className='grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]'>
           <MappingList
             mappings={mappingsQuery.data ?? []}
             selectedMappingId={selectedMappingId}
@@ -488,9 +488,9 @@ export function GraphMappingPage() {
             onDelete={(mappingId) => deleteMutation.mutate(mappingId)}
           />
 
-          <div className='space-y-4'>
+          <div className='space-y-5'>
             {!builderHydrated ? (
-              <Card>
+              <Card className='rounded-xl border shadow-sm'>
                 <CardHeader>
                   <CardTitle>Loaded mapping</CardTitle>
                 </CardHeader>
@@ -520,9 +520,41 @@ export function GraphMappingPage() {
           </div>
         </div>
 
-        <Card className='mt-4 w-full'>
-          <CardHeader>
-            <CardTitle>Graph preview</CardTitle>
+        <Card className='w-full rounded-xl border shadow-sm'>
+          <CardHeader className='flex flex-col gap-3 border-b bg-muted/20 sm:flex-row sm:items-start sm:justify-between'>
+            <div className='space-y-1'>
+              <CardTitle>Graph Preview</CardTitle>
+              <p className='text-sm text-muted-foreground'>Auto-generated from selected relationships.</p>
+            </div>
+
+            <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button disabled={positionedPreviewNodes.length === 0}>Export Training JSON</Button>
+              </DialogTrigger>
+              <DialogContent className='max-h-[80vh] max-w-4xl overflow-hidden'>
+                <DialogHeader>
+                  <DialogTitle>Training JSON</DialogTitle>
+                  <DialogDescription>
+                    Read-only export generated from the current graph mapping state.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className='overflow-auto rounded-md border bg-muted/30 p-3'>
+                  <pre className='max-h-[52vh] whitespace-pre-wrap break-all text-xs'>
+                    {trainingExportText}
+                  </pre>
+                </div>
+
+                <DialogFooter>
+                  <Button type='button' variant='outline' onClick={downloadTrainingJson}>
+                    Download JSON
+                  </Button>
+                  <Button type='button' onClick={copyTrainingJson}>
+                    Copy JSON
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent>
             <GraphPreview
@@ -534,37 +566,6 @@ export function GraphMappingPage() {
                 )
               }
             />
-
-            <div className='mt-4 flex justify-end'>
-              <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button disabled={positionedPreviewNodes.length === 0}>Export Training JSON</Button>
-                </DialogTrigger>
-                <DialogContent className='max-h-[80vh] max-w-4xl overflow-hidden'>
-                  <DialogHeader>
-                    <DialogTitle>Training JSON</DialogTitle>
-                    <DialogDescription>
-                      Read-only export generated from the current graph mapping state.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className='overflow-auto rounded-md border bg-muted/30 p-3'>
-                    <pre className='max-h-[52vh] whitespace-pre-wrap break-all text-xs'>
-                      {trainingExportText}
-                    </pre>
-                  </div>
-
-                  <DialogFooter>
-                    <Button type='button' variant='outline' onClick={downloadTrainingJson}>
-                      Download JSON
-                    </Button>
-                    <Button type='button' onClick={copyTrainingJson}>
-                      Copy JSON
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
           </CardContent>
         </Card>
       </Main>

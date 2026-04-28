@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -42,10 +43,13 @@ export function RelationshipBuilder({
   }, [focusNameTick])
 
   return (
-    <div className='space-y-4'>
-      <Card>
-        <CardHeader>
-          <CardTitle>Relationship Builder</CardTitle>
+    <div className='space-y-5'>
+      <Card className='rounded-xl border shadow-sm'>
+        <CardHeader className='space-y-2'>
+          <div className='flex items-center gap-2'>
+            <Badge variant='secondary'>Setup</Badge>
+            <CardTitle>Relationship Builder</CardTitle>
+          </div>
         </CardHeader>
         <CardContent className='space-y-3'>
           <Input
@@ -70,7 +74,7 @@ export function RelationshipBuilder({
 
       <RelatedLayerBuilder entities={entities} value={builder} onChange={onChangeBuilder} />
 
-      <div className='flex justify-end'>
+      <div className='flex justify-end pt-1'>
         <Button onClick={onSave} disabled={saveDisabled}>
           {saveLabel}
         </Button>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -24,9 +25,12 @@ export function RootSelector({ entities, value, onChange }: RootSelectorProps) {
   const columns = (selectedEntity?.columns ?? []).map((item) => item.name)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>1) Root item</CardTitle>
+    <Card className='rounded-xl border shadow-sm'>
+      <CardHeader className='space-y-2'>
+        <div className='flex items-center gap-2'>
+          <Badge variant='secondary'>Step 1</Badge>
+          <CardTitle>Root item</CardTitle>
+        </div>
       </CardHeader>
       <CardContent className='space-y-3'>
         <Select

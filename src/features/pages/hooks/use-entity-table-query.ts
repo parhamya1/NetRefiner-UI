@@ -149,5 +149,6 @@ export function useEntityTableQuery({
     toggleSort,
     setPage,
     setPageSize,
+    refetch: query.refetch,
   }
 }

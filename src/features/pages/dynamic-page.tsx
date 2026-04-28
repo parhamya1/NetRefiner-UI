@@ -1,9 +1,13 @@
 import { useMemo } from 'react'
 import { AxiosError } from 'axios'
-import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, ArrowUpDown, Ban, FileX } from 'lucide-react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { AlertCircle, AlertTriangle, ArrowUpDown, Ban, FileX, Pencil, Plus, Trash2 } from 'lucide-react'
+import { deleteEntityRow } from '@/lib/api/entities'
 import { getPageBySlug } from '@/lib/api/pages'
+import { handleServerError } from '@/lib/handle-server-error'
+import { useAuthStore } from '@/stores/auth-store'
 import { ConfigDrawer } from '@/components/config-drawer'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -30,6 +34,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { type PageSectionConfig } from '@/types/api'
+import { RowFormDialog } from './components/row-form-dialog'
 import { useEntityTableQuery } from './hooks/use-entity-table-query'
 import { getColumnLabel, type EntityTableOperator } from './utils/entity-table-utils'
 
@@ -50,6 +55,14 @@ function SectionRowsTable({
 }: {
   section: PageSectionConfig
 }) {
+  const { auth } = useAuthStore()
+  const canManageRows =
+    auth.user?.role === 'admin' || auth.user?.role === 'superadmin'
+
+  const [rowDialogOpen, setRowDialogOpen] = useState(false)
+  const [editingRow, setEditingRow] = useState<Record<string, unknown> | null>(null)
+  const [deletingRow, setDeletingRow] = useState<Record<string, unknown> | null>(null)
+
   const {
     columns,
     rows,
@@ -70,9 +83,34 @@ function SectionRowsTable({
     toggleSort,
     setPage,
     setPageSize,
+    refetch,
   } = useEntityTableQuery({
     entityId: section.entity_id,
     columns: section.columns,
+  })
+
+  function resolveRowId(row: Record<string, unknown>) {
+    const value = row.row_id ?? row.id
+    if (typeof value === 'string' || typeof value === 'number') {
+      return String(value)
+    }
+
+    return null
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!deletingRow) return
+      const rowId = resolveRowId(deletingRow)
+      if (!rowId) return
+
+      await deleteEntityRow(section.entity_id, rowId)
+    },
+    onSuccess: async () => {
+      setDeletingRow(null)
+      await refetch()
+    },
+    onError: handleServerError,
   })
 
   if (isLoading && rows.length === 0) {
@@ -113,9 +151,23 @@ function SectionRowsTable({
     <div className='space-y-4'>
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <p className='text-sm font-medium'>Section controls</p>
-        <Button variant='outline' size='sm' onClick={resetFilters}>
-          Reset filters
-        </Button>
+        <div className='flex items-center gap-2'>
+          <Button variant='outline' size='sm' onClick={resetFilters}>
+            Reset filters
+          </Button>
+          {canManageRows ? (
+            <Button
+              size='sm'
+              onClick={() => {
+                setEditingRow(null)
+                setRowDialogOpen(true)
+              }}
+            >
+              <Plus className='mr-1 size-3.5' />
+              Create Row
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {filterableColumns.length > 0 && (
@@ -192,6 +244,7 @@ function SectionRowsTable({
                   </TableHead>
                 )
               })}
+              {canManageRows ? <TableHead className='w-[120px] text-right'>Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -203,12 +256,37 @@ function SectionRowsTable({
                       {String(row[column.name] ?? '-')}
                     </TableCell>
                   ))}
+                  {canManageRows ? (
+                    <TableCell className='text-right'>
+                      <div className='flex justify-end gap-1'>
+                        <Button
+                          type='button'
+                          size='icon'
+                          variant='outline'
+                          onClick={() => {
+                            setEditingRow(row)
+                            setRowDialogOpen(true)
+                          }}
+                        >
+                          <Pencil className='size-3.5' />
+                        </Button>
+                        <Button
+                          type='button'
+                          size='icon'
+                          variant='destructive'
+                          onClick={() => setDeletingRow(row)}
+                        >
+                          <Trash2 className='size-3.5' />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={columns.length + (canManageRows ? 1 : 0)}
                   className='h-24 text-center text-muted-foreground'
                 >
                   No rows available.
@@ -262,6 +340,43 @@ function SectionRowsTable({
           </Button>
         </div>
       </div>
+
+      {canManageRows ? (
+        <>
+          {rowDialogOpen ? (
+            <RowFormDialog
+              key={editingRow ? `edit-${resolveRowId(editingRow)}` : 'create'}
+              open={rowDialogOpen}
+              onOpenChange={setRowDialogOpen}
+              entityId={section.entity_id}
+              columns={columns}
+              row={editingRow}
+              rowId={editingRow ? resolveRowId(editingRow) : null}
+              onSuccess={async () => {
+                await refetch()
+              }}
+            />
+          ) : null}
+          <ConfirmDialog
+            open={!!deletingRow}
+            onOpenChange={(open) => {
+              if (!open) setDeletingRow(null)
+            }}
+            handleConfirm={() => deleteMutation.mutate()}
+            title={
+              <span className='text-destructive'>
+                <AlertTriangle className='me-1 inline-block size-4' />
+                Delete row
+              </span>
+            }
+            desc='Are you sure you want to delete this row? This action cannot be undone.'
+            confirmText='Delete'
+            destructive
+            isLoading={deleteMutation.isPending}
+            disabled={!deletingRow || !resolveRowId(deletingRow)}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

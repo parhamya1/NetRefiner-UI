@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { AxiosError } from 'axios'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertCircle, AlertTriangle, ArrowUpDown, Ban, FileX, Pencil, Plus, Trash2 } from 'lucide-react'
 import { deleteEntityRow } from '@/lib/api/entities'
 import { getPageBySlug } from '@/lib/api/pages'
 import { handleServerError } from '@/lib/handle-server-error'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { useAuthStore } from '@/stores/auth-store'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -383,7 +384,7 @@ function SectionRowsTable({
 
 export function DynamicPage({ slug }: DynamicPageProps) {
   const pageQuery = useQuery({
-    queryKey: ['pages', 'by-slug', slug],
+    queryKey: QUERY_KEYS.pages.bySlug(slug),
     queryFn: () => getPageBySlug(slug),
     retry: false,
   })

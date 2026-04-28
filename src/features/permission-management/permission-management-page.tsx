@@ -142,6 +142,7 @@ export function PermissionManagementPage() {
   })
 
   const flattenedPages = useMemo(() => flattenPagesHierarchy(pages), [pages])
+  const pageById = useMemo(() => new Map(pages.map((page) => [page.id, page])), [pages])
 
   const permissionMap = useMemo(() => {
     const map = new Map<string, boolean>()
@@ -231,6 +232,33 @@ export function PermissionManagementPage() {
     }
 
     setOverrides(nextOverrides)
+  }
+
+  function handleTogglePage(pageId: string, checked: CheckedState) {
+    const nextValue = checked === true
+
+    setOverrides((current) => {
+      const nextOverrides = {
+        ...current,
+        [pageId]: nextValue,
+      }
+
+      if (!nextValue) return nextOverrides
+
+      let currentPage = pageById.get(pageId)
+      const visited = new Set<string>()
+
+      while (currentPage?.parent_id) {
+        const parentId = currentPage.parent_id
+        if (visited.has(parentId)) break
+        visited.add(parentId)
+
+        nextOverrides[parentId] = true
+        currentPage = pageById.get(parentId)
+      }
+
+      return nextOverrides
+    })
   }
 
   return (
@@ -382,12 +410,7 @@ export function PermissionManagementPage() {
                         <div className='flex justify-end'>
                           <Checkbox
                             checked={getCanView(page.id)}
-                            onCheckedChange={(checked) =>
-                              setOverrides((current) => ({
-                                ...current,
-                                [page.id]: Boolean(checked),
-                              }))
-                            }
+                            onCheckedChange={(checked) => handleTogglePage(page.id, checked)}
                           />
                         </div>
                       </TableCell>

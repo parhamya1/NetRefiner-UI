@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { AxiosError } from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Ban, FileX } from 'lucide-react'
-import { queryEntityRows } from '@/lib/api/entities'
+import { AlertCircle, ArrowUpDown, Ban, FileX } from 'lucide-react'
 import { getPageBySlug } from '@/lib/api/pages'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
@@ -30,24 +29,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { type PageSectionColumn, type PageSectionConfig } from '@/types/api'
+import { type PageSectionConfig } from '@/types/api'
+import { useEntityTableQuery } from './hooks/use-entity-table-query'
+import { getColumnLabel, type EntityTableOperator } from './utils/entity-table-utils'
 
 type DynamicPageProps = {
   slug: string
 }
-
-type SectionSortState = {
-  column: string
-  direction: 'asc' | 'desc'
-}
-
-type SectionFilterState = Record<
-  string,
-  {
-    operator: string
-    value: string
-  }
->
 
 function getPageErrorState(error: unknown) {
   if (!(error instanceof AxiosError)) return 'general' as const
@@ -57,177 +45,37 @@ function getPageErrorState(error: unknown) {
 
   return 'general' as const
 }
-
-function getColumnType(column: PageSectionColumn) {
-  const type = column.clickhouse_type.toLowerCase()
-
-  if (
-    type.includes('int') ||
-    type.includes('float') ||
-    type.includes('decimal') ||
-    type.includes('number')
-  ) {
-    return 'number' as const
-  }
-
-  if (
-    type.includes('date') ||
-    type.includes('datetime') ||
-    type.includes('timestamp')
-  ) {
-    return 'date' as const
-  }
-
-  return 'text' as const
-}
-
-function getOperatorOptions(column: PageSectionColumn) {
-  const columnType = getColumnType(column)
-
-  if (columnType === 'number') {
-    return [
-      { label: 'Equals', value: 'equals' },
-      { label: 'Greater than', value: 'greater_than' },
-      { label: 'Less than', value: 'less_than' },
-    ]
-  }
-
-  if (columnType === 'date') {
-    return [
-      { label: 'Equals', value: 'equals' },
-      { label: 'On or after', value: 'greater_or_equal' },
-      { label: 'On or before', value: 'less_or_equal' },
-    ]
-  }
-
-  return [{ label: 'Contains', value: 'contains' }]
-}
-
-function getDefaultOperator(column: PageSectionColumn) {
-  return getOperatorOptions(column)[0]?.value ?? 'contains'
-}
-
-function normalizeFilterValue(column: PageSectionColumn, value: string) {
-  if (getColumnType(column) !== 'number') return value
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : value
-}
-
 function SectionRowsTable({
   section,
 }: {
   section: PageSectionConfig
 }) {
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
-  const [sortState, setSortState] = useState<SectionSortState | null>(null)
-  const [filterState, setFilterState] = useState<SectionFilterState>({})
-
-  const sectionColumns = section.columns
-
-  const filterableColumns = useMemo(
-    () => sectionColumns.filter((column) => column.is_filterable),
-    [sectionColumns]
-  )
-
-  const activeFilters = useMemo(
-    () =>
-      filterableColumns.flatMap((column) => {
-        const state = filterState[column.name]
-        const filterValue = state?.value?.trim()
-
-        if (!filterValue) return []
-
-        return [
-          {
-            column: column.name,
-            operator: state.operator,
-            value: normalizeFilterValue(column, filterValue),
-          },
-        ]
-      }),
-    [filterState, filterableColumns]
-  )
-
-  const rowsQuery = useQuery({
-    queryKey: [
-      'pages',
-      'section-query',
-      section.entity_id,
-      page,
-      pageSize,
-      sortState,
-      activeFilters,
-    ],
-    queryFn: () =>
-      queryEntityRows(section.entity_id, {
-        filters: activeFilters,
-        sort: sortState ?? undefined,
-        page,
-        page_size: pageSize,
-      }),
+  const {
+    columns,
+    rows,
+    pagination,
+    filters,
+    sort,
+    page,
+    pageSize,
+    isLoading,
+    error,
+    canGoPrevious,
+    canGoNext,
+    filterableColumns,
+    getOperatorOptions,
+    setFilterValue,
+    setFilterOperator,
+    resetFilters,
+    toggleSort,
+    setPage,
+    setPageSize,
+  } = useEntityTableQuery({
+    entityId: section.entity_id,
+    columns: section.columns,
   })
 
-  const rowsData = rowsQuery.data
-  const resolvedColumns =
-    rowsData && rowsData.columns.length > 0 ? rowsData.columns : sectionColumns
-
-  const canGoPrev = page > 1 && !rowsQuery.isLoading
-  const canGoNext =
-    (rowsData?.pagination.returned ?? 0) >= pageSize && !rowsQuery.isLoading
-
-  function toggleSort(columnName: string) {
-    setPage(1)
-    setSortState((current) => {
-      if (!current || current.column !== columnName) {
-        return { column: columnName, direction: 'asc' }
-      }
-
-      if (current.direction === 'asc') {
-        return { column: columnName, direction: 'desc' }
-      }
-
-      return null
-    })
-  }
-
-  function updateFilterValue(columnName: string, value: string) {
-    setPage(1)
-    setFilterState((current) => {
-      const existing = current[columnName]
-      const column = filterableColumns.find((item) => item.name === columnName)
-      const operator = existing?.operator || (column ? getDefaultOperator(column) : 'contains')
-
-      return {
-        ...current,
-        [columnName]: {
-          operator,
-          value,
-        },
-      }
-    })
-  }
-
-  function updateFilterOperator(columnName: string, operator: string) {
-    setPage(1)
-    setFilterState((current) => ({
-      ...current,
-      [columnName]: {
-        operator,
-        value: current[columnName]?.value ?? '',
-      },
-    }))
-  }
-
-  function resetControls() {
-    setPage(1)
-    setPageSize(50)
-    setSortState(null)
-    setFilterState({})
-  }
-
-  if (rowsQuery.isLoading && !rowsData) {
+  if (isLoading && rows.length === 0) {
     return (
       <div className='space-y-2'>
         <Skeleton className='h-8 w-full' />
@@ -237,7 +85,7 @@ function SectionRowsTable({
     )
   }
 
-  if (rowsQuery.isError && !rowsData) {
+  if (error && rows.length === 0) {
     return (
       <Alert variant='destructive'>
         <AlertCircle />
@@ -249,7 +97,7 @@ function SectionRowsTable({
     )
   }
 
-  if (resolvedColumns.length === 0) {
+  if (columns.length === 0) {
     return (
       <Alert>
         <AlertCircle />
@@ -263,24 +111,34 @@ function SectionRowsTable({
 
   return (
     <div className='space-y-4'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <p className='text-sm font-medium'>Section controls</p>
+        <Button variant='outline' size='sm' onClick={resetFilters}>
+          Reset filters
+        </Button>
+      </div>
+
       {filterableColumns.length > 0 && (
         <div className='grid gap-3 rounded-md border p-3 sm:grid-cols-2 xl:grid-cols-3'>
           {filterableColumns.map((column) => {
-            const filter = filterState[column.name]
-            const operator = filter?.operator || getDefaultOperator(column)
+            const filter = filters[column.name]
+            const operator =
+              filter?.operator || getOperatorOptions(column)[0]?.value || 'contains'
             const value = filter?.value ?? ''
 
             return (
-              <div key={`${section.entity_id}-filter-${column.name}`} className='space-y-2'>
-                <p className='text-sm font-medium'>{column.label || column.name}</p>
+              <div key={`${section.entity_id}-filter-${column.name}`} className='space-y-1.5'>
+                <p className='text-xs font-medium text-muted-foreground'>
+                  {getColumnLabel(column)}
+                </p>
                 <div className='flex gap-2'>
                   <Select
                     value={operator}
                     onValueChange={(nextOperator) =>
-                      updateFilterOperator(column.name, nextOperator)
+                      setFilterOperator(column.name, nextOperator as EntityTableOperator)
                     }
                   >
-                    <SelectTrigger className='w-44'>
+                    <SelectTrigger className='h-8 w-40 text-xs'>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -292,11 +150,12 @@ function SectionRowsTable({
                     </SelectContent>
                   </Select>
                   <Input
+                    className='h-8'
                     value={value}
                     onChange={(event) =>
-                      updateFilterValue(column.name, event.target.value)
+                      setFilterValue(column.name, event.target.value)
                     }
-                    placeholder={`Filter ${column.label || column.name}`}
+                    placeholder={`Filter ${getColumnLabel(column)}`}
                   />
                 </div>
               </div>
@@ -305,40 +164,13 @@ function SectionRowsTable({
         </div>
       )}
 
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <div className='flex items-center gap-2'>
-          <p className='text-sm text-muted-foreground'>Page size</p>
-          <Select
-            value={String(pageSize)}
-            onValueChange={(value) => {
-              setPage(1)
-              setPageSize(Number(value))
-            }}
-          >
-            <SelectTrigger className='w-24'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='10'>10</SelectItem>
-              <SelectItem value='25'>25</SelectItem>
-              <SelectItem value='50'>50</SelectItem>
-              <SelectItem value='100'>100</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button variant='outline' onClick={resetControls}>
-          Reset filters
-        </Button>
-      </div>
-
-      <div className='overflow-hidden rounded-md border'>
-        <Table>
+      <div className='overflow-x-auto rounded-md border'>
+        <Table className='min-w-max'>
           <TableHeader>
             <TableRow>
-              {resolvedColumns.map((column) => {
-                const isSorted = sortState?.column === column.name
-                const sortDirection = isSorted ? sortState?.direction : null
+              {columns.map((column) => {
+                const isSorted = sort?.column === column.name
+                const sortDirection = isSorted ? sort?.direction : null
 
                 return (
                   <TableHead key={`${section.entity_id}-${column.name}`}>
@@ -348,11 +180,11 @@ function SectionRowsTable({
                       className='-ms-3 h-8 px-3'
                       onClick={() => toggleSort(column.name)}
                     >
-                      <span>{column.label || column.name}</span>
+                      <span>{getColumnLabel(column)}</span>
                       {sortDirection === 'asc' ? (
-                        <ArrowUp className='ms-1 size-3.5' />
+                        <span className='ms-1 text-xs'>↑</span>
                       ) : sortDirection === 'desc' ? (
-                        <ArrowDown className='ms-1 size-3.5' />
+                        <span className='ms-1 text-xs'>↓</span>
                       ) : (
                         <ArrowUpDown className='ms-1 size-3.5' />
                       )}
@@ -363,10 +195,10 @@ function SectionRowsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rowsData && rowsData.rows.length > 0 ? (
-              rowsData.rows.map((row, rowIndex) => (
+            {rows.length > 0 ? (
+              rows.map((row, rowIndex) => (
                 <TableRow key={`${section.entity_id}-row-${rowIndex}`}>
-                  {resolvedColumns.map((column) => (
+                  {columns.map((column) => (
                     <TableCell key={`${section.entity_id}-${rowIndex}-${column.name}`}>
                       {String(row[column.name] ?? '-')}
                     </TableCell>
@@ -376,7 +208,7 @@ function SectionRowsTable({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={resolvedColumns.length}
+                  colSpan={columns.length}
                   className='h-24 text-center text-muted-foreground'
                 >
                   No rows available.
@@ -388,19 +220,41 @@ function SectionRowsTable({
       </div>
 
       <div className='flex items-center justify-between gap-2'>
-        <p className='text-sm text-muted-foreground'>
-          Page {page} • Returned {rowsData?.pagination.returned ?? 0} rows
-        </p>
+        <div className='flex flex-wrap items-center gap-3 text-sm text-muted-foreground'>
+          <p>Page {page}</p>
+          <p>Showing {pagination.returned} rows</p>
+          <div className='flex items-center gap-2'>
+            <span>Page size</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value))
+              }}
+            >
+              <SelectTrigger className='h-8 w-20'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='10'>10</SelectItem>
+                <SelectItem value='25'>25</SelectItem>
+                <SelectItem value='50'>50</SelectItem>
+                <SelectItem value='100'>100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className='flex items-center gap-2'>
           <Button
             variant='outline'
+            size='sm'
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            disabled={!canGoPrev}
+            disabled={!canGoPrevious}
           >
             Previous
           </Button>
           <Button
             variant='outline'
+            size='sm'
             onClick={() => setPage((prev) => prev + 1)}
             disabled={!canGoNext}
           >

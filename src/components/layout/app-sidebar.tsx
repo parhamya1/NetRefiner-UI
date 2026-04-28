@@ -53,27 +53,27 @@ function toMenuTreeNode(page: Page, children: MenuTreeNode[]): MenuTreeNode {
   }
 }
 
-function buildMenuTreeFromPages(pages: Page[], includeIds?: Set<string>): MenuTreeNode[] {
-  const filteredPages = pages.filter(
-    (page) => page.is_menu_visible && (!includeIds || includeIds.has(getPageId(page)))
-  )
-  const pagesByParent = new Map<string | null, Page[]>()
+function buildMenuTreeFromPages(pages: Page[]): MenuTreeNode[] {
+  const map: Record<string, MenuTreeNode> = {}
+  const roots: MenuTreeNode[] = []
 
-  for (const page of filteredPages) {
-    const siblings = pagesByParent.get(getParentId(page)) ?? []
-    siblings.push(page)
-    pagesByParent.set(getParentId(page), siblings)
-  }
+  pages.forEach((page) => {
+    const id = getPageId(page)
+    map[id] = toMenuTreeNode(page, [])
+  })
 
-  const buildNodes = (parentId: string | null): MenuTreeNode[] => {
-    const siblings = (pagesByParent.get(parentId) ?? []).sort(
-      (a, b) => a.menu_order - b.menu_order
-    )
+  pages.forEach((page) => {
+    const id = getPageId(page)
+    const parentId = getParentId(page)
 
-    return siblings.map((page) => toMenuTreeNode(page, buildNodes(getPageId(page))))
-  }
+    if (parentId && map[parentId]) {
+      map[parentId].children.push(map[id])
+    } else {
+      roots.push(map[id])
+    }
+  })
 
-  return buildNodes(null)
+  return roots
 }
 
 function getIncludePageIdsForUser(pages: Page[], permissions: PagePermission[]): {
@@ -116,7 +116,20 @@ export function buildPermittedPageTree(
   includeIds: Set<string>
 } {
   const { allowedIds, includeIds } = getIncludePageIdsForUser(allPages, pagePermissions)
-  const tree = buildMenuTreeFromPages(allPages, includeIds)
+  const filteredPages = allPages.filter(
+    (page) => page.is_menu_visible && includeIds.has(getPageId(page))
+  )
+
+  // eslint-disable-next-line no-console
+  console.log('ALL PAGES', allPages)
+  // eslint-disable-next-line no-console
+  console.log('ALLOWED IDS', allowedIds)
+  // eslint-disable-next-line no-console
+  console.log('INCLUDE IDS', includeIds)
+  // eslint-disable-next-line no-console
+  console.log('FILTERED PAGES', filteredPages)
+
+  const tree = buildMenuTreeFromPages(filteredPages)
   return { tree, allowedIds, includeIds }
 }
 

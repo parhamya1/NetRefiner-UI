@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AxiosError } from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Ban, FileX } from 'lucide-react'
+import { AlertCircle, ArrowUpDown, Ban, FileX } from 'lucide-react'
 import { queryEntityRows } from '@/lib/api/entities'
 import { getPageBySlug } from '@/lib/api/pages'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -263,6 +263,13 @@ function SectionRowsTable({
 
   return (
     <div className='space-y-4'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <p className='text-sm font-medium'>Section controls</p>
+        <Button variant='outline' size='sm' onClick={resetControls}>
+          Reset filters
+        </Button>
+      </div>
+
       {filterableColumns.length > 0 && (
         <div className='grid gap-3 rounded-md border p-3 sm:grid-cols-2 xl:grid-cols-3'>
           {filterableColumns.map((column) => {
@@ -271,8 +278,10 @@ function SectionRowsTable({
             const value = filter?.value ?? ''
 
             return (
-              <div key={`${section.entity_id}-filter-${column.name}`} className='space-y-2'>
-                <p className='text-sm font-medium'>{column.label || column.name}</p>
+              <div key={`${section.entity_id}-filter-${column.name}`} className='space-y-1.5'>
+                <p className='text-xs font-medium text-muted-foreground'>
+                  {column.label || column.name}
+                </p>
                 <div className='flex gap-2'>
                   <Select
                     value={operator}
@@ -280,7 +289,7 @@ function SectionRowsTable({
                       updateFilterOperator(column.name, nextOperator)
                     }
                   >
-                    <SelectTrigger className='w-44'>
+                    <SelectTrigger className='h-8 w-40 text-xs'>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -292,6 +301,7 @@ function SectionRowsTable({
                     </SelectContent>
                   </Select>
                   <Input
+                    className='h-8'
                     value={value}
                     onChange={(event) =>
                       updateFilterValue(column.name, event.target.value)
@@ -305,35 +315,8 @@ function SectionRowsTable({
         </div>
       )}
 
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <div className='flex items-center gap-2'>
-          <p className='text-sm text-muted-foreground'>Page size</p>
-          <Select
-            value={String(pageSize)}
-            onValueChange={(value) => {
-              setPage(1)
-              setPageSize(Number(value))
-            }}
-          >
-            <SelectTrigger className='w-24'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value='10'>10</SelectItem>
-              <SelectItem value='25'>25</SelectItem>
-              <SelectItem value='50'>50</SelectItem>
-              <SelectItem value='100'>100</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button variant='outline' onClick={resetControls}>
-          Reset filters
-        </Button>
-      </div>
-
-      <div className='overflow-hidden rounded-md border'>
-        <Table>
+      <div className='overflow-x-auto rounded-md border'>
+        <Table className='min-w-max'>
           <TableHeader>
             <TableRow>
               {resolvedColumns.map((column) => {
@@ -350,9 +333,9 @@ function SectionRowsTable({
                     >
                       <span>{column.label || column.name}</span>
                       {sortDirection === 'asc' ? (
-                        <ArrowUp className='ms-1 size-3.5' />
+                        <span className='ms-1 text-xs'>↑</span>
                       ) : sortDirection === 'desc' ? (
-                        <ArrowDown className='ms-1 size-3.5' />
+                        <span className='ms-1 text-xs'>↓</span>
                       ) : (
                         <ArrowUpDown className='ms-1 size-3.5' />
                       )}
@@ -388,12 +371,34 @@ function SectionRowsTable({
       </div>
 
       <div className='flex items-center justify-between gap-2'>
-        <p className='text-sm text-muted-foreground'>
-          Page {page} • Returned {rowsData?.pagination.returned ?? 0} rows
-        </p>
+        <div className='flex flex-wrap items-center gap-3 text-sm text-muted-foreground'>
+          <p>Page {page}</p>
+          <p>Showing {rowsData?.pagination.returned ?? 0} rows</p>
+          <div className='flex items-center gap-2'>
+            <span>Page size</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPage(1)
+                setPageSize(Number(value))
+              }}
+            >
+              <SelectTrigger className='h-8 w-20'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='10'>10</SelectItem>
+                <SelectItem value='25'>25</SelectItem>
+                <SelectItem value='50'>50</SelectItem>
+                <SelectItem value='100'>100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className='flex items-center gap-2'>
           <Button
             variant='outline'
+            size='sm'
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             disabled={!canGoPrev}
           >
@@ -401,6 +406,7 @@ function SectionRowsTable({
           </Button>
           <Button
             variant='outline'
+            size='sm'
             onClick={() => setPage((prev) => prev + 1)}
             disabled={!canGoNext}
           >

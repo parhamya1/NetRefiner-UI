@@ -19,6 +19,25 @@ export interface ApiUser {
   updated_at: string
 }
 
+
+
+export type User = ApiUser
+
+export interface UserCreatePayload {
+  email: string
+  full_name: string
+  password: string
+  role: UserRole
+  is_active: boolean
+}
+
+export interface UserUpdatePayload {
+  email: string
+  full_name: string
+  role: UserRole
+  is_active: boolean
+}
+
 export interface LoginInput {
   email: string
   password: string

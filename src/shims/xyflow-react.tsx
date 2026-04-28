@@ -4,6 +4,7 @@ export type Node<T = Record<string, unknown>> = {
   id: string
   position: { x: number; y: number }
   data: T
+  style?: React.CSSProperties
 }
 
 export type Edge = {
@@ -16,6 +17,7 @@ export type Edge = {
 export type Connection = {
   source: string
   target: string
+  [key: string]: unknown
 }
 
 export type NodeChange = {
@@ -188,7 +190,7 @@ export default function ReactFlow({
         <div
           key={node.id}
           className='absolute min-w-[180px] max-w-[260px] cursor-move whitespace-pre-wrap break-words rounded-md border bg-card p-3 text-xs leading-4 shadow-sm'
-          style={{ left: node.position.x, top: node.position.y }}
+          style={{ left: node.position.x, top: node.position.y, ...node.style }}
           onMouseDown={(event) => startDrag(event, node)}
         >
           <button

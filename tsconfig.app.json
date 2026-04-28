@@ -18,7 +18,8 @@
     /* Alias */
     "paths": {
       "@/*": ["./src/*"],
-      "@xyflow/react": ["./src/shims/xyflow-react.tsx"]
+      "@xyflow/react": ["./src/shims/xyflow-react.tsx"],
+      "@xyflow/react/dist/style.css": ["./src/shims/xyflow-react-style.css"]
     },
 
     /* Linting */

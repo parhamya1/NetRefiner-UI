@@ -54,6 +54,12 @@ function buildGeneratedGraph(
         value: builder.root.value,
         node_type: 'entity_value',
       },
+      style: {
+        maxWidth: 260,
+        width: 260,
+        whiteSpace: 'normal',
+        wordBreak: 'break-word',
+      },
     },
   ]
   const edges: GraphEdge[] = []
@@ -70,6 +76,12 @@ function buildGeneratedGraph(
         column: builder.relatedColumn,
         value: relatedValue,
         node_type: 'entity_value',
+      },
+      style: {
+        maxWidth: 260,
+        width: 260,
+        whiteSpace: 'normal',
+        wordBreak: 'break-word',
       },
     })
 
@@ -97,6 +109,12 @@ function buildGeneratedGraph(
           column: childLayer.column,
           value: childValue,
           node_type: 'entity_value',
+        },
+        style: {
+          maxWidth: 260,
+          width: 260,
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
         },
       })
       edges.push({
@@ -240,6 +258,12 @@ export function GraphMappingPage() {
         column: node.column,
         value: node.value,
         node_type: 'entity_value',
+      },
+      style: {
+        maxWidth: 260,
+        width: 260,
+        whiteSpace: 'normal',
+        wordBreak: 'break-word',
       },
     }))
   }
@@ -410,8 +434,8 @@ export function GraphMappingPage() {
               <CardContent>
                 <GraphPreview
                   key={previewSignature}
-                  nodes={positionedPreviewNodes}
-                  edges={previewGraph.edges}
+                  generatedNodes={positionedPreviewNodes}
+                  generatedEdges={previewGraph.edges}
                   onNodesUpdate={(nextNodes) =>
                     setPositionOverrides(
                       Object.fromEntries(nextNodes.map((node) => [node.id, node.position]))

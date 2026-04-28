@@ -384,7 +384,7 @@ export function GraphMappingPage() {
           <p className='text-muted-foreground'>Guided flow: root → related values → child values.</p>
         </div>
 
-        <div className='grid gap-4 xl:grid-cols-[340px_1fr]'>
+        <div className='grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]'>
           <MappingList
             mappings={mappingsQuery.data ?? []}
             selectedMappingId={selectedMappingId}
@@ -422,25 +422,25 @@ export function GraphMappingPage() {
               onSave={() => saveMutation.mutate()}
               focusNameTick={focusNameTick}
             />
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Graph preview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <GraphPreview
-                  generatedNodes={positionedPreviewNodes}
-                  generatedEdges={previewGraph.edges}
-                  onNodesUpdate={(nextNodes) =>
-                    setPositionOverrides(
-                      Object.fromEntries(nextNodes.map((node) => [node.id, node.position]))
-                    )
-                  }
-                />
-              </CardContent>
-            </Card>
           </div>
         </div>
+
+        <Card className='mt-4 w-full'>
+          <CardHeader>
+            <CardTitle>Graph preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <GraphPreview
+              generatedNodes={positionedPreviewNodes}
+              generatedEdges={previewGraph.edges}
+              onNodesUpdate={(nextNodes) =>
+                setPositionOverrides(
+                  Object.fromEntries(nextNodes.map((node) => [node.id, node.position]))
+                )
+              }
+            />
+          </CardContent>
+        </Card>
       </Main>
     </>
   )

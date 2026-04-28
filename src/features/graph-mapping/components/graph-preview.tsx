@@ -26,17 +26,19 @@ export function GraphPreview({ generatedNodes, generatedEdges, onNodesUpdate }: 
   )
 
   return (
-    <div className='h-[600px] w-full rounded-md border'>
-      <ReactFlow
-        nodes={generatedNodes}
-        edges={generatedEdges}
-        onNodesChange={onNodesChange}
-        fitView
-      >
-        <Background />
-        <Controls />
-        <MiniMap />
-      </ReactFlow>
+    <div className='w-full overflow-x-auto rounded-md border'>
+      <div className='h-[600px] min-w-[1000px]'>
+        <ReactFlow
+          nodes={generatedNodes}
+          edges={generatedEdges}
+          onNodesChange={onNodesChange}
+          fitView
+        >
+          <Background />
+          <Controls />
+          <MiniMap />
+        </ReactFlow>
+      </div>
     </div>
   )
 }

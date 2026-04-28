@@ -6,7 +6,7 @@ import type {
   EntityRowsResponse,
 } from '@/types/api'
 
-export async function listEntities(): Promise<EntityReference[]> {
+export async function getEntities(): Promise<EntityReference[]> {
   const { data } = await apiClient.get<EntityReference[]>('/entities')
   return data
 }
@@ -39,3 +39,38 @@ export async function queryEntityRows(
   )
   return data
 }
+
+
+export async function createEntityRow(
+  entityId: string,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/entities/${encodeURIComponent(entityId)}/rows`,
+    payload
+  )
+  return data
+}
+
+export async function updateEntityRow(
+  entityId: string,
+  rowId: string,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.put<Record<string, unknown>>(
+    `/entities/${encodeURIComponent(entityId)}/rows/${encodeURIComponent(rowId)}`,
+    payload
+  )
+  return data
+}
+
+export async function deleteEntityRow(
+  entityId: string,
+  rowId: string
+): Promise<void> {
+  await apiClient.delete(
+    `/entities/${encodeURIComponent(entityId)}/rows/${encodeURIComponent(rowId)}`
+  )
+}
+
+export const listEntities = getEntities
